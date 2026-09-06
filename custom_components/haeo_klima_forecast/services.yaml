@@ -1,0 +1,17 @@
+recalculate_weights:
+  name: Recalculate weights
+  description: >
+    Recalculates the regression weights (influence of outdoor temperature, setpoints,
+    radiation, wind, night setback and duty throttling on power) based on the
+    historical data. Can e.g. be called weekly by an automation.
+  fields:
+    config_entry_id:
+      name: Climate system
+      description: >
+        Optional: the config entry ID of the climate system for which the weights
+        should be recalculated. If empty, all configured systems are
+        recalculated.
+      required: false
+      selector:
+        config_entry:
+          integration: haeo_klima_forecast

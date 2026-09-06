@@ -1,0 +1,78 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up HAEO Klima Forecast",
+        "description": "General settings for this climate system (one outdoor unit + multiple indoor units).",
+        "data": {
+          "name": "System name",
+          "energy_sensor": "Energy meter sensor (kWh)",
+          "power_sensor": "Power sensor (W)",
+          "weather_provider": "Weather service",
+          "latitude": "Latitude (empty = HA location)",
+          "longitude": "Longitude (empty = HA location)",
+          "forecast_hours": "Forecast horizon (hours)",
+          "update_interval_minutes": "Update interval (minutes)",
+          "training_days": "Training period for weights (days)",
+          "indoor_unit_count": "Number of indoor units"
+        }
+      },
+      "indoor_unit": {
+        "title": "Indoor unit {index} of {count}",
+        "data": {
+          "name": "Indoor unit name",
+          "climate_entity": "Climate entity"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure HAEO Klima Forecast",
+        "menu_options": {
+          "general": "General settings",
+          "indoor_units": "Indoor units",
+          "night_setback": "Night setback",
+          "duty_throttle": "Duty throttling"
+        }
+      },
+      "general": { "title": "General settings" },
+      "indoor_units": {
+        "title": "Number of indoor units",
+        "data": { "indoor_unit_count": "Number of indoor units" }
+      },
+      "indoor_unit_edit": {
+        "title": "Indoor unit {index} of {count}",
+        "data": { "name": "Name", "climate_entity": "Climate entity" }
+      },
+      "night_setback": {
+        "title": "Night setback",
+        "data": {
+          "night_setback_enabled": "Enabled",
+          "night_setback_active_entity": "Entity: setback currently active (set by an automation)",
+          "night_setback_offset_entity": "Entity: offset amount (°C)",
+          "night_setback_start": "Start (HH:MM, for forecast projection)",
+          "night_setback_end": "End (HH:MM, for forecast projection)"
+        }
+      },
+      "duty_throttle": {
+        "title": "Duty throttling (load-dependent)",
+        "data": {
+          "duty_throttle_enabled": "Enabled",
+          "duty_throttle_load_entity": "Load sensor",
+          "duty_throttle_offset_entity": "Entity: currently effective offset (°C)",
+          "duty_throttle_threshold": "Load threshold (W)",
+          "duty_throttle_max_offset": "Maximum offset (°C)",
+          "duty_throttle_step": "Step size (°C)"
+        }
+      }
+    }
+  },
+  "services": {
+    "recalculate_weights": {
+      "name": "Recalculate weights",
+      "description": "Recalculates the regression weights based on the historical data."
+    }
+  }
+}

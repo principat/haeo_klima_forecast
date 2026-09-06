@@ -1,0 +1,78 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HAEO Klima Forecast einrichten",
+        "description": "Allgemeine Einstellungen für dieses Klimasystem (ein Außengerät + mehrere Innengeräte).",
+        "data": {
+          "name": "Name des Systems",
+          "energy_sensor": "Energiezähler-Sensor (kWh)",
+          "power_sensor": "Leistungssensor (kW)",
+          "weather_provider": "Wetterdienst",
+          "latitude": "Breitengrad (leer = HA-Standort)",
+          "longitude": "Längengrad (leer = HA-Standort)",
+          "forecast_hours": "Forecast-Horizont (Stunden)",
+          "update_interval_minutes": "Aktualisierungsintervall (Minuten)",
+          "training_days": "Trainingszeitraum für Gewichte (Tage)",
+          "indoor_unit_count": "Anzahl Innengeräte"
+        }
+      },
+      "indoor_unit": {
+        "title": "Innengerät {index} von {count}",
+        "data": {
+          "name": "Name des Innengeräts",
+          "climate_entity": "Climate-Entität"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HAEO Klima Forecast anpassen",
+        "menu_options": {
+          "general": "Allgemeine Einstellungen",
+          "indoor_units": "Innengeräte",
+          "night_setback": "Nachtabsenkung",
+          "duty_throttle": "Taktverlängerung"
+        }
+      },
+      "general": { "title": "Allgemeine Einstellungen" },
+      "indoor_units": {
+        "title": "Anzahl Innengeräte",
+        "data": { "indoor_unit_count": "Anzahl Innengeräte" }
+      },
+      "indoor_unit_edit": {
+        "title": "Innengerät {index} von {count}",
+        "data": { "name": "Name", "climate_entity": "Climate-Entität" }
+      },
+      "night_setback": {
+        "title": "Nachtabsenkung",
+        "data": {
+          "night_setback_enabled": "Aktiv",
+          "night_setback_active_entity": "Entität: Absenkung gerade aktiv (von Automatisierung gesetzt)",
+          "night_setback_offset_entity": "Entität: Höhe des Offsets (°C)",
+          "night_setback_start": "Beginn (HH:MM, für Forecast-Projektion)",
+          "night_setback_end": "Ende (HH:MM, für Forecast-Projektion)"
+        }
+      },
+      "duty_throttle": {
+        "title": "Taktverlängerung (lastabhängig)",
+        "data": {
+          "duty_throttle_enabled": "Aktiv",
+          "duty_throttle_load_entity": "Lastsensor",
+          "duty_throttle_offset_entity": "Entität: aktuell wirksamer Offset (°C)",
+          "duty_throttle_threshold": "Last-Schwelle (W)",
+          "duty_throttle_max_offset": "Maximaler Offset (°C)",
+          "duty_throttle_step": "Schrittweite (°C)"
+        }
+      }
+    }
+  },
+  "services": {
+    "recalculate_weights": {
+      "name": "Gewichte neu berechnen",
+      "description": "Berechnet die Regressions-Gewichte anhand der historischen Daten neu."
+    }
+  }
+}

@@ -1,0 +1,19 @@
+[tool.semantic_release]
+version_variables = [
+    "custom_components/haeo_klima_forecast/manifest.json:version",
+]
+build_command = ""
+major_on_zero = true
+allow_zero_version = true
+tag_format = "v{version}"
+
+[tool.semantic_release.branches.main]
+match = "master"
+
+[tool.semantic_release.changelog]
+exclude_commit_patterns = []
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "style", "refactor", "test"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
