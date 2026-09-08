@@ -43,6 +43,22 @@ from .const import (
     IU_CLIMATE_ENTITY,
     STORAGE_VERSION,
 )
+from .mirror import (
+    SUFFIX_ACTIVE,
+    SUFFIX_CURRENT_TEMPERATURE,
+    SUFFIX_HVAC_ACTION,
+    SUFFIX_HVAC_MODE,
+    SUFFIX_SETPOINT,
+    WEATHER_SUFFIX_OUTDOOR_TEMPERATURE,
+    WEATHER_SUFFIX_SHORTWAVE_RADIATION,
+    WEATHER_SUFFIX_WIND_SPEED,
+    climate_mirror_unique_id,
+    decode_hvac_action,
+    decode_hvac_mode,
+    resolve_entity_id,
+    weather_mirror_unique_id,
+)
+from .weather.base import WeatherPoint
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -109,10 +125,10 @@ def _resample_last_value(
     return result
 
 
-async def _fetch_power_per_hour(
+async def _fetch_statistics_mean_per_hour(
     hass: HomeAssistant, entity_id: str, start: datetime, end: datetime
 ) -> dict[datetime, float]:
-    """Reads the power (kW) per hour from the HA long-term statistics.
+    """Reads the hourly mean of an entity's long-term statistics.
 
     Note: `statistics_during_period` is a synchronous recorder API (not
     `async def`) and must therefore always run via the recorder executor -
@@ -143,6 +159,29 @@ async def _fetch_power_per_hour(
             continue
         per_hour[ts] = mean
     return per_hour
+
+
+async def _fetch_power_per_hour(
+    hass: HomeAssistant, entity_id: str, start: datetime, end: datetime
+) -> dict[datetime, float]:
+    """Reads the power (kW) per hour from the HA long-term statistics."""
+    return await _fetch_statistics_mean_per_hour(hass, entity_id, start, end)
+
+
+async def _fetch_mirror_mean_per_hour(
+    hass: HomeAssistant, unique_id: str, start: datetime, end: datetime
+) -> dict[datetime, float]:
+    """Reads the hourly mean of one of our own recorder-mirror sensors (see mirror.py).
+
+    Returns an empty dict for hours the mirror does not (yet) cover - e.g.
+    before the integration was set up, or before a mirror sensor's unique_id
+    resolves to an entity_id at all. Callers merge this with a fallback
+    (raw climate-entity history / the weather provider's archive API).
+    """
+    entity_id = resolve_entity_id(hass, unique_id)
+    if entity_id is None:
+        return {}
+    return await _fetch_statistics_mean_per_hour(hass, entity_id, start, end)
 
 
 async def _fetch_state_history(
@@ -221,6 +260,106 @@ async def _fetch_climate_mode_history(
     return samples
 
 
+async def _fetch_climate_setpoint_by_hour(
+    hass: HomeAssistant, entity_id: str, start: datetime, end: datetime, hour_marks: list[datetime]
+) -> dict[datetime, float]:
+    """Setpoint temperature per hour: recorder-mirror statistics first, raw state history as fallback."""
+    mirror = await _fetch_mirror_mean_per_hour(
+        hass, climate_mirror_unique_id(entity_id, SUFFIX_SETPOINT), start, end
+    )
+    fallback: dict[datetime, float] = {}
+    if any(mark not in mirror for mark in hour_marks):
+        raw = await _fetch_state_history(hass, entity_id, start, end)
+        fallback = _resample_last_value(raw, hour_marks)
+    return {**fallback, **mirror}
+
+
+async def _fetch_climate_active_by_hour(
+    hass: HomeAssistant, entity_id: str, start: datetime, end: datetime, hour_marks: list[datetime]
+) -> dict[datetime, float]:
+    """Active fraction per hour: recorder-mirror statistics first, raw state history as fallback."""
+    mirror = await _fetch_mirror_mean_per_hour(
+        hass, climate_mirror_unique_id(entity_id, SUFFIX_ACTIVE), start, end
+    )
+    fallback: dict[datetime, float] = {}
+    if any(mark not in mirror for mark in hour_marks):
+        raw = await _fetch_climate_active_history(hass, entity_id, start, end)
+        fallback = _resample_last_value(raw, hour_marks)
+    return {**fallback, **mirror}
+
+
+async def _fetch_climate_mode_by_hour(
+    hass: HomeAssistant, entity_id: str, start: datetime, end: datetime, hour_marks: list[datetime]
+) -> dict[datetime, tuple[str | None, str | None, float | None]]:
+    """HVAC mode/action/current-temp per hour: recorder-mirror statistics first, raw history as fallback."""
+    mode_mirror = await _fetch_mirror_mean_per_hour(
+        hass, climate_mirror_unique_id(entity_id, SUFFIX_HVAC_MODE), start, end
+    )
+    action_mirror = await _fetch_mirror_mean_per_hour(
+        hass, climate_mirror_unique_id(entity_id, SUFFIX_HVAC_ACTION), start, end
+    )
+    temp_mirror = await _fetch_mirror_mean_per_hour(
+        hass, climate_mirror_unique_id(entity_id, SUFFIX_CURRENT_TEMPERATURE), start, end
+    )
+
+    fallback: dict[datetime, tuple[str | None, str | None, float | None]] = {}
+    if any(mark not in mode_mirror for mark in hour_marks):
+        raw = await _fetch_climate_mode_history(hass, entity_id, start, end)
+        fallback = _resample_last_value(raw, hour_marks)
+
+    result: dict[datetime, tuple[str | None, str | None, float | None]] = dict(fallback)
+    for mark, mode_value in mode_mirror.items():
+        result[mark] = (
+            decode_hvac_mode(mode_value),
+            decode_hvac_action(action_mirror.get(mark)),
+            temp_mirror.get(mark),
+        )
+    return result
+
+
+async def _fetch_weather_by_hour(
+    hass: HomeAssistant, entry_id: str, provider, start: datetime, end: datetime, hour_marks: list[datetime]
+) -> dict[datetime, WeatherPoint]:
+    """Historical weather per hour: our own recorder-mirror statistics first (see mirror.py).
+
+    Only the hours the mirrors do not cover yet (typically the period before
+    this integration - and thus the mirror sensors - existed) fall back to
+    the weather provider's own historical archive API, so training does not
+    depend solely on that external API once enough own history has built up.
+    """
+    temp_mirror = await _fetch_mirror_mean_per_hour(
+        hass, weather_mirror_unique_id(entry_id, WEATHER_SUFFIX_OUTDOOR_TEMPERATURE), start, end
+    )
+    radiation_mirror = await _fetch_mirror_mean_per_hour(
+        hass, weather_mirror_unique_id(entry_id, WEATHER_SUFFIX_SHORTWAVE_RADIATION), start, end
+    )
+    wind_mirror = await _fetch_mirror_mean_per_hour(
+        hass, weather_mirror_unique_id(entry_id, WEATHER_SUFFIX_WIND_SPEED), start, end
+    )
+
+    missing_marks = [mark for mark in hour_marks if mark not in temp_mirror]
+    api_by_hour: dict[datetime, WeatherPoint] = {}
+    if missing_marks:
+        gap_start, gap_end = min(missing_marks), max(missing_marks) + timedelta(hours=1)
+        api_points = await provider.async_get_historical(gap_start, gap_end)
+        api_by_hour = {
+            p.timestamp.replace(minute=0, second=0, microsecond=0): p for p in api_points
+        }
+
+    result: dict[datetime, WeatherPoint] = {}
+    for mark in hour_marks:
+        if mark in temp_mirror:
+            result[mark] = WeatherPoint(
+                timestamp=mark,
+                temperature_c=temp_mirror[mark],
+                shortwave_radiation=radiation_mirror.get(mark),
+                wind_speed_ms=wind_mirror.get(mark),
+            )
+        elif mark in api_by_hour:
+            result[mark] = api_by_hour[mark]
+    return result
+
+
 def _hourly_marks(start: datetime, end: datetime) -> list[datetime]:
     marks = []
     cur = start.replace(minute=0, second=0, microsecond=0)
@@ -239,10 +378,7 @@ async def async_train_weights(
     start = end - timedelta(days=training_days)
     hour_marks = _hourly_marks(start, end)
 
-    weather_points = await provider.async_get_historical(start, end)
-    weather_by_hour = {
-        p.timestamp.replace(minute=0, second=0, microsecond=0): p for p in weather_points
-    }
+    weather_by_hour = await _fetch_weather_by_hour(hass, entry_id, provider, start, end, hour_marks)
 
     power_by_hour = await _fetch_power_per_hour(
         hass, config[CONF_POWER_SENSOR], start, end
@@ -256,12 +392,15 @@ async def async_train_weights(
         entity_id = unit.get(IU_CLIMATE_ENTITY)
         if not entity_id:
             continue
-        raw = await _fetch_state_history(hass, entity_id, start, end)
-        setpoint_series.append(_resample_last_value(raw, hour_marks))
-        raw_active = await _fetch_climate_active_history(hass, entity_id, start, end)
-        active_series.append(_resample_last_value(raw_active, hour_marks))
-        raw_mode = await _fetch_climate_mode_history(hass, entity_id, start, end)
-        mode_series.append(_resample_last_value(raw_mode, hour_marks))
+        setpoint_series.append(
+            await _fetch_climate_setpoint_by_hour(hass, entity_id, start, end, hour_marks)
+        )
+        active_series.append(
+            await _fetch_climate_active_by_hour(hass, entity_id, start, end, hour_marks)
+        )
+        mode_series.append(
+            await _fetch_climate_mode_by_hour(hass, entity_id, start, end, hour_marks)
+        )
 
     night_offset_by_hour: dict[datetime, float] = {}
     if config.get(CONF_NIGHT_SETBACK_OFFSET_ENTITY):

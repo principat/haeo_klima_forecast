@@ -42,6 +42,7 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
         self.config = {**entry.data, **entry.options}
         self.weight_store = WeightStore(hass, entry.entry_id)
         self._weights_cache: dict | None = None
+        self.latest_weather_point = None
 
         update_minutes = self.config.get(CONF_UPDATE_INTERVAL_MIN, DEFAULT_UPDATE_INTERVAL_MIN)
         super().__init__(
@@ -75,6 +76,13 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
             weather_points = await provider.async_get_forecast(hours)
         finally:
             await session.close()
+
+        if weather_points:
+            # Also feeds the weather-mirror sensors (see mirror.py / sensor.py):
+            # the first forecast point is "now", which is what gets recorded so
+            # that future training can rely on our own long-term statistics
+            # instead of only the provider's historical archive API.
+            self.latest_weather_point = weather_points[0]
 
         units = self._collect_indoor_unit_plans()
         night_cfg = self._night_setback_config()

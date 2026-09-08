@@ -1,3 +1,7 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
 [tool.semantic_release]
 version_variables = [
     "custom_components/haeo_klima_forecast/manifest.json:version",
