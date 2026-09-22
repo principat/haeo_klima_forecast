@@ -1,21 +1,8 @@
-"""Factory for weather providers."""
+"""Weather data access: historical (Open-Meteo, fixed provider) and forecast (template entity)."""
 from __future__ import annotations
 
-from ..const import WEATHER_PROVIDER_DWD, WEATHER_PROVIDER_OPENMETEO
-from .base import WeatherPoint, WeatherProvider
-from .dwd import DwdProvider
-from .openmeteo import OpenMeteoProvider
+from .base import WeatherPoint
+from .forecast_template import async_parse_forecast_entity
+from .openmeteo import OpenMeteoHistoricalClient
 
-_PROVIDERS = {
-    WEATHER_PROVIDER_OPENMETEO: OpenMeteoProvider,
-    WEATHER_PROVIDER_DWD: DwdProvider,
-}
-
-
-def get_provider(provider_key: str, latitude: float, longitude: float, session) -> WeatherProvider:
-    """Instantiates the matching provider based on the configuration key."""
-    cls = _PROVIDERS.get(provider_key, OpenMeteoProvider)
-    return cls(latitude, longitude, session)
-
-
-__all__ = ["WeatherPoint", "WeatherProvider", "get_provider"]
+__all__ = ["WeatherPoint", "OpenMeteoHistoricalClient", "async_parse_forecast_entity"]

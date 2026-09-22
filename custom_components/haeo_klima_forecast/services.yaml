@@ -1,9 +1,10 @@
 recalculate_weights:
   name: Recalculate weights
   description: >
-    Recalculates the regression weights (influence of outdoor temperature, setpoints,
-    radiation, wind, night setback and duty throttling on power) based on the
-    historical data. Can e.g. be called weekly by an automation.
+    Recalculates the regression weights (influence of outdoor temperature, indoor
+    temperature, radiation, wind and humidity on power) based on the historical
+    data in the integration's own HistoryStore. Can e.g. be called weekly by an
+    automation.
   fields:
     config_entry_id:
       name: Climate system

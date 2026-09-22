@@ -5,52 +5,84 @@
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=principat&repository=haeo_klima_forecast&category=integration)
 
 Custom HACS integration for Home Assistant: forecasts the power consumption
-of an air conditioning system (one outdoor unit, multiple indoor units,
-heating + cooling) based on weather forecasts (Open-Meteo or DWD/Bright Sky)
-as well as historical consumption and weather data. Intended as a
-consumption forecast source for HAEO or your own energy optimization
-automations.
+of an air conditioning system (heating and/or cooling) from a weather
+forecast, using a simple "energy signature" (degree-hours) regression
+learned from your own historical power and indoor-temperature data.
+Intended as a consumption forecast source for HAEO or your own energy
+optimization automations.
+
+Full design rationale and the framework-independent specification (in
+German) live in [SPECIFICATION.md](SPECIFICATION.md).
 
 ## How it works
 
-1. **Training** (`weighting.py`): via the `haeo_klima_forecast.recalculate_weights`
-   service, a regression is computed over the last *N* days (default: 90 days).
-   Input variables: historical outdoor temperature/radiation/wind (from the
-   chosen weather service), historical setpoints & activity per indoor unit,
-   and - if configured - the historical values of your night setback and
-   duty throttling. Target variable: hourly consumption from your kWh meter
-   (HA long-term statistics). Result: a set of weights (coefficients),
-   persisted via `homeassistant.helpers.storage.Store`.
-2. **Forecast** (`forecast.py`): a pure, simple function that combines the
-   stored weights with the weather forecast data for the upcoming hours.
-   Runs automatically every `update_interval_minutes` via the coordinator.
-3. **Weather abstraction** (`weather/`): a `WeatherProvider` interface with
-   implementations for Open-Meteo (`openmeteo.py`) and DWD via Bright Sky
-   (`dwd.py`). Additional services can be added without touching the
-   training/forecast logic.
+The model is deliberately simple and needs almost no configuration (see
+[SPECIFICATION.md, section 1](SPECIFICATION.md)):
 
-## Handling the two special adjustments
+- **Physical idea**: heat demand ≈ insulation value × (indoor − outdoor
+  temperature). The regression learns the insulation value itself as a
+  coefficient - you never configure it. Since the system can both heat and
+  cool, the resulting curve is a "bathtub": flat baseline load in between,
+  with two independently-sloped branches for heating and cooling.
+- **Three data sources per climate system**: a historized power sensor, a
+  weather-forecast entity, and one indoor-temperature source (a thermometer,
+  or a climate entity's current-temperature attribute). No indoor-unit list,
+  no night-setback/duty-throttle configuration - their effect already shows
+  up in the measured indoor temperature.
+- **Training** (`weighting.py`, via the `haeo_klima_forecast.recalculate_weights`
+  service): a ridge-regularized linear regression over the last *N* days
+  (default 365), reading exclusively from this integration's own
+  `HistoryStore` (see below) - never live from the recorder or a weather API
+  at training time.
+- **Forecast** (`forecast.py` + `coordinator.py`): combines the stored
+  weights with the weather-forecast entity's `forecast` attribute. For the
+  indoor-temperature input, each forecast hour reuses the actual measured
+  value from 24 hours earlier (cyclically, over multi-day horizons) - this
+  captures a recurring night-setback pattern without modeling it explicitly.
+  A load-reactive duty-throttle effect is not projected at all (no reliable
+  basis to predict it); since both mechanisms only ever *reduce* consumption,
+  omitting them can only make the forecast a little too high, never too low.
+- **HistoryStore** (`history_store.py`): the integration's own hourly
+  training-data cache, replacing the older "mirror sensor" approach. A
+  one-off backfill on setup reads as much power/weather history as is
+  available; a daily background job then appends only the newly elapsed
+  hours. If the indoor-temperature source is a climate entity (no long-term
+  statistics of its own in HA), an hourly sampler writes one value per hour
+  directly into the store instead.
+- **Historical weather**: fetched directly from the free, key-less
+  [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api),
+  bounded by the power sensor's own available history.
+- **Forecast weather**: this integration does **not** talk to any weather
+  service itself. It reads an existing HA entity that already exposes a
+  forecast in a small, provider-independent shape:
 
-- **Night setback**: time-based, and therefore well predictable for future
-  hours. You configure the start/end time as well as the entity that
-  supplies the offset amount; the active entity continues to be set/used by
-  your own automation.
-- **Duty throttling**: load-dependent/reactive, and therefore NOT reliably
-  predictable for the future. The historical effect is included in
-  training; for the forecast it is currently conservatively assumed to be a
-  0 °C offset (`special_adjustments.projected_duty_throttle_offset`). If you
-  want, you can use a configured empirical value there instead of 0.
+  ```yaml
+  state: 5.3   # current outdoor temperature (°C)
+  attributes:
+    forecast:
+      - time: "2026-09-23T14:00:00+00:00"
+        value: 6.1        # outdoor temperature (°C), required
+        humidity: 72      # %, optional
+        radiation: 210    # W/m², optional
+        wind_speed: 3.4   # m/s, optional
+        wind_direction: 180  # °, optional
+      - ...
+  ```
+
+  Turning a concrete weather service (Open-Meteo, DWD, ...) into this shape
+  is the job of a separate, provider-specific "mapper-helper" project - not
+  part of this integration.
 
 ## Installation via HACS
 
 1. Add this repository as a "Custom Repository" (category: Integration) in
    HACS.
 2. Install "HAEO Klima Forecast" and restart Home Assistant.
-3. Settings → Devices & Services → Add Integration → "HAEO Klima Forecast"
-   → follow the wizard (name, energy meter, power sensor, weather service,
-   number of indoor units, the climate entity for each indoor unit).
-4. Optionally, via "Configure" on the integration: set up night setback and
-   duty throttling parameters, adjust indoor units later.
+3. Set up (or reuse) a forecast-template weather entity for your location,
+   via a mapper-helper project for your preferred weather service.
+4. Settings → Devices & Services → Add Integration → "HAEO Klima Forecast"
+   → provide a name, the power sensor, the weather-forecast entity, and the
+   indoor-temperature source.
 5. Once enough history is available (recommended: at least 2-4 weeks,
    better 90 days), press the `button.<system>_recalculate_weights` button
    (or run the `haeo_klima_forecast.recalculate_weights` service).
@@ -78,9 +110,11 @@ action:
 ## Entities
 
 - `sensor.<system>_power_forecast`: current state = forecast for the next
-  hour (kW), attribute `forecast` = complete hourly series.
+  hour (kW), attribute `forecast` = complete hourly series (time, value,
+  outdoor_temp, indoor_temp, heating/cooling_degree_hours).
 - `sensor.<system>_weights`: diagnostic sensor, state = R² of the last
-  regression, attributes contain the individual coefficients.
+  regression, attributes contain the individual coefficients and which
+  optional features (radiation/wind/humidity/wind direction) were included.
 - `button.<system>_recalculate_weights`: recalculates the weights of this
   system immediately.
 - `switch.<system>_weekly_weight_recalculation`: weekly automatic
@@ -88,25 +122,18 @@ action:
 
 ## Known limitations / points to refine
 
+- Only one aggregated indoor-temperature reading is used per system, not
+  per room or per indoor unit - a deliberate trade-off for minimal
+  configuration (see SPECIFICATION.md, section 1.9).
+- The regression is piecewise-linear; heat-pump nonlinearities at extreme
+  cold (COP drop, defrost cycles) are not modeled separately.
+- Wind direction is a speculative, circularly-encoded feature (sin/cos) -
+  only included in training if it actually has enough data coverage, and
+  its real predictive value has not been validated yet.
 - The recorder/statistics APIs (`statistics_during_period`,
   `state_changes_during_period`) are internal HA APIs and their
-  signature/behavior can change slightly between HA versions. Please check
-  the logs once after installation and adjust `weighting.py` to your HA
-  version if necessary.
+  signature/behavior can change slightly between HA versions.
 - For multiple parallel climate systems, simply set up the integration
   multiple times via "Add Integration", each with its own name/sensors -
   every config entry is an independent system with its own coordinator, its
-  own weights and its own entities.
-- Night setback is currently configured per system (not per indoor unit),
-  since usually a shared time window applies to all indoor units. If you
-  need different windows per indoor unit, this can be extended in
-  `config_flow.py`/`const.py` (move the offset/window into the indoor unit
-  configuration instead of the general one).
-- The DWD integration uses Bright Sky as an open wrapper around DWD open
-  data, since the DWD itself does not offer a simple lat/lon JSON API. If
-  you prefer a different DWD source, only `weather/dwd.py` needs to be
-  adapted.
-- The "active indoor units" are read from the current `climate` state; for
-  the forecast projection it is assumed that the current hvac_mode/setpoint
-  remains constant over the horizon (no calendar/presence forecast of the
-  setpoints themselves).
+  own weights, its own `HistoryStore` and its own entities.
