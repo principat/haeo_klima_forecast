@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "haeo_klima_forecast"
-PLATFORMS = ["sensor"]
+PLATFORMS = ["button", "sensor", "switch"]
 
 STORAGE_VERSION = 1
 STORAGE_KEY_TEMPLATE = f"{DOMAIN}_weights_{{entry_id}}"
@@ -55,3 +55,8 @@ SERVICE_RECALCULATE_WEIGHTS = "recalculate_weights"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 
 SIGNAL_WEIGHTS_UPDATED = f"{DOMAIN}_weights_updated"
+
+# Weekly automatic retraining (switch entity), local time
+AUTO_RECALCULATE_WEEKDAY = 6  # Sunday (datetime.weekday())
+AUTO_RECALCULATE_HOUR = 3
+AUTO_RECALCULATE_MINUTE = 30

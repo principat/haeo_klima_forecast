@@ -52,9 +52,15 @@ automations.
 4. Optionally, via "Configure" on the integration: set up night setback and
    duty throttling parameters, adjust indoor units later.
 5. Once enough history is available (recommended: at least 2-4 weeks,
-   better 90 days), run the `haeo_klima_forecast.recalculate_weights`
-   service once (e.g. via Developer Tools → Services, or directly from an
-   automation that repeats it e.g. weekly at night).
+   better 90 days), press the `button.<system>_recalculate_weights` button
+   (or run the `haeo_klima_forecast.recalculate_weights` service).
+6. Optionally turn on `switch.<system>_weekly_weight_recalculation` to
+   recalculate the weights automatically every Sunday at 03:30 (local time).
+   No automation needs to be created for this; the schedule runs inside the
+   integration and the switch state survives restarts.
+
+If you need a different schedule, leave the switch off and call the service
+from your own automation instead:
 
 ```yaml
 # Example automation: weekly retraining
@@ -75,6 +81,10 @@ action:
   hour (kW), attribute `forecast` = complete hourly series.
 - `sensor.<system>_weights`: diagnostic sensor, state = R² of the last
   regression, attributes contain the individual coefficients.
+- `button.<system>_recalculate_weights`: recalculates the weights of this
+  system immediately.
+- `switch.<system>_weekly_weight_recalculation`: weekly automatic
+  recalculation (Sunday 03:30) on/off.
 
 ## Known limitations / points to refine
 

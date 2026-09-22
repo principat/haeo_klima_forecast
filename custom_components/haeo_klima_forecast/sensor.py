@@ -11,6 +11,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_INDOOR_UNITS, CONF_NAME, DOMAIN, IU_CLIMATE_ENTITY, IU_NAME
 from .coordinator import HaeoForecastCoordinator
+from .entity import HaeoBaseEntity
 from .mirror import (
     SUFFIX_ACTIVE,
     SUFFIX_CURRENT_TEMPERATURE,
@@ -127,22 +128,7 @@ def _to_float(value) -> float | None:
         return None
 
 
-class _BaseEntity(CoordinatorEntity[HaeoForecastCoordinator]):
-    def __init__(self, coordinator: HaeoForecastCoordinator, entry: ConfigEntry) -> None:
-        super().__init__(coordinator)
-        self._entry = entry
-        self._system_name = entry.data.get(CONF_NAME, entry.title)
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._entry.entry_id)},
-            name=self._system_name,
-            manufacturer="HAEO Klima Forecast",
-        )
-
-
-class HaeoForecastSensor(_BaseEntity, SensorEntity):
+class HaeoForecastSensor(HaeoBaseEntity, SensorEntity):
     """Next forecast hour as state, complete series as attribute.
 
     The `forecast` attribute provides the hourly prediction as a list of
@@ -172,7 +158,7 @@ class HaeoForecastSensor(_BaseEntity, SensorEntity):
         }
 
 
-class HaeoWeightsSensor(_BaseEntity, SensorEntity):
+class HaeoWeightsSensor(HaeoBaseEntity, SensorEntity):
     """Diagnostic sensor: shows the currently active weights and training quality (R²)."""
 
     _attr_icon = "mdi:function-variant"
