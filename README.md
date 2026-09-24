@@ -137,3 +137,42 @@ action:
   multiple times via "Add Integration", each with its own name/sensors -
   every config entry is an independent system with its own coordinator, its
   own weights, its own `HistoryStore` and its own entities.
+
+## Development
+
+Everything below is for anyone working on this integration itself, not for
+consumers of the HACS package.
+
+Install the test dependencies and run the suite:
+
+```bash
+pip install -r requirements_test.txt
+pytest
+```
+
+The suite (`tests/`) runs entirely in-process, with no separate Home
+Assistant instance or Docker container required:
+
+- Most tests use [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component),
+  which spins up a real (in-memory) `HomeAssistant` core object per test -
+  real config entries, real entity/service registries, real coordinators -
+  just without a UI or network I/O.
+- `tests/test_e2e_full_flow.py` goes one step further and is a genuine
+  end-to-end test: it drives the actual config-flow steps a user would
+  click through, seeds a real (in-memory) `recorder` component with
+  long-term statistics for the power/indoor-temperature sensors, presses
+  the real `recalculate_weights` button entity, and asserts on the
+  resulting weights/forecast sensor entities. The only thing stubbed out is
+  the genuine external network boundary (the Open-Meteo historical weather
+  API) - everything else is exercised through real HA components. Use this
+  test as the template whenever a change should be verified against the
+  full "configure → backfill → train → forecast" journey rather than a
+  single module in isolation.
+- `.devcontainer/` provides a ready-to-use dev container with the test
+  dependencies preinstalled.
+
+Keep new tests plausibility-based where the assertions concern the
+regression's actual numeric output (R² range, sign/monotonicity of
+coefficients, forecast ≥ 0) rather than pinned to exact values, so they
+don't need rewriting every time the model itself is tuned - see the
+existing tests for the pattern.
