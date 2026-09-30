@@ -20,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
 HOURLY_VARS = (
-    "temperature_2m,shortwave_radiation,wind_speed_10m,wind_direction_10m,"
+    "temperature_2m,wind_speed_10m,wind_direction_10m,"
     "relative_humidity_2m"
 )
 
@@ -87,7 +87,6 @@ class OpenMeteoHistoricalClient:
         hourly = data.get("hourly", {})
         times = hourly.get("time", [])
         temps = hourly.get("temperature_2m", [])
-        rad = hourly.get("shortwave_radiation", [])
         wind = hourly.get("wind_speed_10m", [])
         wind_dir = hourly.get("wind_direction_10m", [])
         hum = hourly.get("relative_humidity_2m", [])
@@ -98,7 +97,6 @@ class OpenMeteoHistoricalClient:
                 WeatherPoint(
                     timestamp=datetime.fromisoformat(t).replace(tzinfo=timezone.utc),
                     temperature_c=temps[i] if i < len(temps) else None,
-                    shortwave_radiation=rad[i] if i < len(rad) else None,
                     wind_speed_ms=wind[i] if i < len(wind) else None,
                     wind_direction_deg=wind_dir[i] if i < len(wind_dir) else None,
                     humidity_pct=hum[i] if i < len(hum) else None,

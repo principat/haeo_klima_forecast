@@ -10,7 +10,6 @@ a small, provider-independent shape:
         - time: "2026-09-23T14:00:00+00:00"
           value: 6.1        # outdoor temperature (°C), required
           humidity: 72      # %, optional
-          radiation: 210    # W/m², optional
           wind_speed: 3.4   # m/s, optional
           wind_direction: 180  # °, optional
         - ...
@@ -30,7 +29,6 @@ from homeassistant.util import dt as dt_util
 from ..const import (
     FORECAST_ATTR_HUMIDITY,
     FORECAST_ATTR_LIST,
-    FORECAST_ATTR_RADIATION,
     FORECAST_ATTR_TEMPERATURE,
     FORECAST_ATTR_TIME,
     FORECAST_ATTR_WIND_DIRECTION,
@@ -39,6 +37,66 @@ from ..const import (
 from .base import WeatherPoint
 
 _LOGGER = logging.getLogger(__name__)
+
+
+_KMH_PER_MS = 3.6
+_WIND_TO_MS = {
+    "km/h": 1 / 3.6,
+    "m/s": 1.0,
+    "mph": 0.44704,
+    "kn": 0.514444,
+    "ft/s": 0.3048,
+}
+
+
+async def async_get_forecast_points(hass: HomeAssistant, entity_id: str, hours: int) -> list[WeatherPoint]:
+    """Reads the hourly forecast of a `weather.*` entity or a forecast-template entity.
+
+    Real weather entities no longer expose a `forecast` attribute (HA 2024.3+);
+    their forecast has to be requested via the `weather.get_forecasts` service.
+    Any other entity (e.g. a template sensor) is read via its `forecast`
+    attribute, see `async_parse_forecast_entity`.
+    """
+    if not entity_id.startswith("weather."):
+        return async_parse_forecast_entity(hass, entity_id, hours)
+
+    state = hass.states.get(entity_id)
+    if state is None:
+        _LOGGER.warning("HAEO Klima Forecast: weather entity '%s' not found", entity_id)
+        return []
+
+    try:
+        response = await hass.services.async_call(
+            "weather",
+            "get_forecasts",
+            {"entity_id": entity_id, "type": "hourly"},
+            blocking=True,
+            return_response=True,
+        )
+    except Exception as err:  # noqa: BLE001 - entity may not support hourly forecasts or be unavailable
+        _LOGGER.warning("HAEO Klima Forecast: weather.get_forecasts for '%s' failed: %s", entity_id, err)
+        return []
+
+    raw_forecast = (response or {}).get(entity_id, {}).get("forecast") or []
+    wind_factor = _WIND_TO_MS.get(str(state.attributes.get("wind_speed_unit", "km/h")).lower(), 1 / _KMH_PER_MS)
+
+    points: list[WeatherPoint] = []
+    for entry in raw_forecast[:hours]:
+        timestamp = _parse_time(entry.get("datetime"))
+        temperature = _try_float(entry.get("temperature"))
+        if timestamp is None or temperature is None:
+            continue
+        wind = _try_float(entry.get("wind_speed"))
+        points.append(
+            WeatherPoint(
+                timestamp=timestamp,
+                temperature_c=temperature,
+                humidity_pct=_try_float(entry.get("humidity")),
+                wind_speed_ms=wind * wind_factor if wind is not None else None,
+                wind_direction_deg=_try_float(entry.get("wind_bearing")),
+            )
+        )
+    return points
 
 
 def async_parse_forecast_entity(hass: HomeAssistant, entity_id: str, hours: int) -> list[WeatherPoint]:
@@ -75,7 +133,6 @@ def async_parse_forecast_entity(hass: HomeAssistant, entity_id: str, hours: int)
                 timestamp=timestamp,
                 temperature_c=float(temperature),
                 humidity_pct=_try_float(entry.get(FORECAST_ATTR_HUMIDITY)),
-                shortwave_radiation=_try_float(entry.get(FORECAST_ATTR_RADIATION)),
                 wind_speed_ms=_try_float(entry.get(FORECAST_ATTR_WIND_SPEED)),
                 wind_direction_deg=_try_float(entry.get(FORECAST_ATTR_WIND_DIRECTION)),
             )

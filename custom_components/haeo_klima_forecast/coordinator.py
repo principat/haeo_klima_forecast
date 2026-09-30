@@ -20,12 +20,14 @@ from .const import (
     CONF_INDOOR_TEMP_SOURCE,
     CONF_LATITUDE,
     CONF_LONGITUDE,
+    CONF_MAX_POWER_KW,
     CONF_POWER_SENSOR,
     CONF_TRAINING_DAYS,
     CONF_UPDATE_INTERVAL_MIN,
     CONF_WEATHER_FORECAST_ENTITY,
     DEFAULT_FORECAST_HOURS,
     DEFAULT_TRAINING_DAYS,
+    DYNAMIC_CAP_HEADROOM,
     DEFAULT_UPDATE_INTERVAL_MIN,
     DOMAIN,
     HISTORY_SYNC_HOUR,
@@ -33,7 +35,7 @@ from .const import (
 )
 from .forecast import compute_forecast_series
 from .history_store import HistoryStore, async_sample_indoor_temperature_now, async_sync_history
-from .weather.forecast_template import async_parse_forecast_entity
+from .weather.forecast_template import async_get_forecast_points
 from .weighting import WeightStore, async_train_weights
 
 _LOGGER = logging.getLogger(__name__)
@@ -144,14 +146,23 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
             )
         self._weights_cache = weights
 
+        if CONF_WEATHER_FORECAST_ENTITY not in self.config:
+            raise UpdateFailed(
+                "This entry has no weather-forecast entity configured (it was "
+                "likely created before the energy-signature rebuild). Delete "
+                "and re-add the integration entry to set it up again."
+            )
+
         hours = self.config.get(CONF_FORECAST_HOURS, DEFAULT_FORECAST_HOURS)
-        weather_points = async_parse_forecast_entity(
+        weather_points = await async_get_forecast_points(
             self.hass, self.config[CONF_WEATHER_FORECAST_ENTITY], hours
         )
 
         indoor_temps = await self._async_resolve_indoor_temps(weather_points)
 
-        forecast = compute_forecast_series(weather_points, indoor_temps, weights["coefficients"])
+        forecast = compute_forecast_series(
+            weather_points, indoor_temps, weights["coefficients"], self._effective_max_kw(weights)
+        )
 
         return {
             "forecast": [
@@ -167,6 +178,14 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
             ],
             "weights": weights,
         }
+
+    def _effective_max_kw(self, weights: dict) -> float | None:
+        """User limit if set, otherwise the dynamic limit (highest measured power * headroom)."""
+        user_cap = self.config.get(CONF_MAX_POWER_KW)
+        if user_cap is not None:
+            return float(user_cap)
+        observed = weights.get("max_observed_kw")
+        return observed * DYNAMIC_CAP_HEADROOM if observed is not None else None
 
     async def _async_resolve_indoor_temps(self, weather_points) -> list[float]:
         """Resolves the "indoor temperature 24h ago, cyclically" input for each forecast hour."""
@@ -204,5 +223,6 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
             "n_samples": result.n_samples,
             "trained_at": result.trained_at,
             "feature_names": result.feature_names,
+            "max_observed_kw": result.max_observed_kw,
         }
         await self.async_request_refresh()

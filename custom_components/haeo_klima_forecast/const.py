@@ -18,10 +18,12 @@ CONF_LONGITUDE = "longitude"
 CONF_FORECAST_HOURS = "forecast_hours"
 CONF_UPDATE_INTERVAL_MIN = "update_interval_minutes"
 CONF_TRAINING_DAYS = "training_days"
+CONF_MAX_POWER_KW = "max_power_kw"                      # optional hard upper limit of the forecast (kW)
 
 DEFAULT_FORECAST_HOURS = 72
 DEFAULT_UPDATE_INTERVAL_MIN = 30
 DEFAULT_TRAINING_DAYS = 365
+DYNAMIC_CAP_HEADROOM = 1.1  # forecast cap = highest measured power in the training data * this
 
 SERVICE_RECALCULATE_WEIGHTS = "recalculate_weights"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
@@ -40,6 +42,5 @@ FORECAST_ATTR_LIST = "forecast"
 FORECAST_ATTR_TIME = "time"
 FORECAST_ATTR_TEMPERATURE = "value"
 FORECAST_ATTR_HUMIDITY = "humidity"
-FORECAST_ATTR_RADIATION = "radiation"
 FORECAST_ATTR_WIND_SPEED = "wind_speed"
 FORECAST_ATTR_WIND_DIRECTION = "wind_direction"

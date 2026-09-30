@@ -30,7 +30,9 @@ class ForecastHour:
     indoor_temp: float
 
 
-def compute_hour(weather: WeatherPoint, indoor_temp: float, coefficients: dict[str, float]) -> ForecastHour:
+def compute_hour(
+    weather: WeatherPoint, indoor_temp: float, coefficients: dict[str, float], max_kw: float | None = None
+) -> ForecastHour:
     """Computes the predicted power for a single hour."""
     heating_degree_hours = max(0.0, indoor_temp - weather.temperature_c)
     cooling_degree_hours = max(0.0, weather.temperature_c - indoor_temp)
@@ -41,8 +43,6 @@ def compute_hour(weather: WeatherPoint, indoor_temp: float, coefficients: dict[s
         + coefficients.get("cooling_degree_hours", 0.0) * cooling_degree_hours
     )
 
-    if weather.shortwave_radiation is not None:
-        predicted += coefficients.get("shortwave_radiation", 0.0) * weather.shortwave_radiation
     if weather.wind_speed_ms is not None:
         predicted += coefficients.get("wind_speed", 0.0) * weather.wind_speed_ms
     if weather.humidity_pct is not None:
@@ -53,6 +53,8 @@ def compute_hour(weather: WeatherPoint, indoor_temp: float, coefficients: dict[s
         predicted += coefficients.get("wind_direction_cos", 0.0) * math.cos(radians)
 
     predicted = max(0.0, predicted)  # negative forecasts make no physical sense
+    if max_kw is not None:
+        predicted = min(predicted, max_kw)
 
     return ForecastHour(
         timestamp=weather.timestamp,
@@ -68,6 +70,7 @@ def compute_forecast_series(
     weather_points: list[WeatherPoint],
     indoor_temps: list[float],
     coefficients: dict[str, float],
+    max_kw: float | None = None,
 ) -> list[ForecastHour]:
     """Computes the complete hourly forecast series for the forecast horizon.
 
@@ -76,6 +79,6 @@ def compute_forecast_series(
     resolved for each forecast hour.
     """
     return [
-        compute_hour(wp, indoor_temp, coefficients)
+        compute_hour(wp, indoor_temp, coefficients, max_kw)
         for wp, indoor_temp in zip(weather_points, indoor_temps)
     ]

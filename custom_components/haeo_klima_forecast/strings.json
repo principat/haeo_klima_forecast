@@ -13,6 +13,7 @@
           "longitude": "Longitude (empty = HA location, used for historical weather)",
           "forecast_hours": "Forecast horizon (hours)",
           "update_interval_minutes": "Update interval (minutes)",
+          "max_power_kw": "Maximum power (kW, optional hard limit)",
           "training_days": "Training period for weights (days)"
         }
       }
@@ -31,6 +32,7 @@
           "longitude": "Longitude (empty = HA location, used for historical weather)",
           "forecast_hours": "Forecast horizon (hours)",
           "update_interval_minutes": "Update interval (minutes)",
+          "max_power_kw": "Maximum power (kW, optional hard limit)",
           "training_days": "Training period for weights (days)"
         }
       }

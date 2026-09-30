@@ -13,6 +13,7 @@
           "longitude": "Längengrad (leer = HA-Standort, für die historische Wetterabfrage)",
           "forecast_hours": "Forecast-Horizont (Stunden)",
           "update_interval_minutes": "Aktualisierungsintervall (Minuten)",
+          "max_power_kw": "Maximale Leistung (kW, optionale harte Obergrenze)",
           "training_days": "Trainingszeitraum für Gewichte (Tage)"
         }
       }
@@ -31,6 +32,7 @@
           "longitude": "Längengrad (leer = HA-Standort, für die historische Wetterabfrage)",
           "forecast_hours": "Forecast-Horizont (Stunden)",
           "update_interval_minutes": "Aktualisierungsintervall (Minuten)",
+          "max_power_kw": "Maximale Leistung (kW, optionale harte Obergrenze)",
           "training_days": "Trainingszeitraum für Gewichte (Tage)"
         }
       }

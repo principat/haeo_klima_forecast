@@ -42,7 +42,7 @@ nötig, jede einzelne Innengeräte-Konfiguration entfällt bewusst:
 1. ein historisierter **Leistungssensor** (Gesamtsystem) – Zielgröße des
    Trainings,
 2. eine **Wetterquelle mit Vorhersage** – Außentemperatur (Pflicht),
-   optional Globalstrahlung, Windgeschwindigkeit, Luftfeuchtigkeit,
+   optional Windgeschwindigkeit, Luftfeuchtigkeit,
 3. eine historisierte **Innentemperatur** – wahlweise über ein
    eigenständiges Thermometer oder das Ist-Temperatur-Attribut einer
    beliebigen Klima-Entität des Systems; repräsentativ für das
@@ -54,7 +54,6 @@ Training und eigenen Vorhersagen – keine gegenseitige Beeinflussung.
 
 **Wetterdaten** pro Stunde:
 - Außentemperatur (°C, Pflichtfeld)
-- Globalstrahlung (W/m², optional)
 - Windgeschwindigkeit (m/s, optional)
 - Windrichtung (°, optional) – neu, sofern sich ein Einfluss zeigt (s. 1.3:
   als Rundungsgröße braucht sie eine gesonderte Kodierung, keine einfache
@@ -78,7 +77,6 @@ Begründung):
       - time: "2026-09-23T14:00:00+00:00"
         value: 6.1        # Außentemperatur (°C), Pflicht
         humidity: 72      # %, optional
-        radiation: 210    # W/m², optional
         wind_speed: 3.4   # m/s, optional
         wind_direction: 180  # °, optional
       - ...
@@ -115,7 +113,7 @@ Gewinne bei Heizen und Kühlen entgegengesetzt wirken, und weil sich der
 COP von Wärmepumpen bei Kälteextremen anders verhält als bei Hitze).
 Reine Temperatur ist dabei erfahrungsgemäß der mit Abstand dominante
 Faktor (typischerweise > 80–90 % erklärte Varianz allein durch die
-Außentemperatur); Globalstrahlung, Wind und Luftfeuchtigkeit liefern in
+Außentemperatur); Wind und Luftfeuchtigkeit liefern in
 dieser Reihenfolge abnehmend zusätzliche, aber sekundäre Erklärungskraft.
 
 **Sonderanpassungen des Sollwerts** (Nachtabsenkung, Taktverlängerung –
@@ -165,11 +163,9 @@ Leistungsaufnahme bestimmt.
         dieser Stunde
      3. **cooling_degree_hours** – analog fürs Kühlen:
         `max(0, Außentemperatur − Innentemperatur)`
-     4. **shortwave_radiation** – Globalstrahlung der Stunde (nur wenn in
-        Historie *und* Vorhersagequelle vorhanden, s. 1.2/1.7)
-     5. **wind_speed** – Windgeschwindigkeit der Stunde (nur wenn verfügbar)
-     6. **humidity** – Luftfeuchtigkeit der Stunde (nur wenn verfügbar)
-     7. **wind_direction** – Windrichtung der Stunde (nur wenn verfügbar
+     4. **wind_speed** – Windgeschwindigkeit der Stunde (nur wenn verfügbar)
+     5. **humidity** – Luftfeuchtigkeit der Stunde (nur wenn verfügbar)
+     6. **wind_direction** – Windrichtung der Stunde (nur wenn verfügbar
         *und* sich ein Einfluss zeigt, s. 1.9). Anders als die übrigen
         Größen ist sie eine **zirkuläre** Größe (0–360°, 359° und 1° liegen
         praktisch nebeneinander) und kann nicht direkt linear als
@@ -208,7 +204,7 @@ Leistungsaufnahme bestimmt.
 3. Aus den gesammelten Zeilen wird ein lineares Regressionsmodell
    geschätzt, das die konfigurierten Eingangsgrößen (mindestens drei: bias,
    heating_degree_hours, cooling_degree_hours; höchstens sieben/acht, wenn
-   Globalstrahlung, Wind, Windrichtung – ggf. als zwei sin/cos-Spalten – und
+   Wind, Windrichtung – ggf. als zwei sin/cos-Spalten – und
    Luftfeuchtigkeit alle konfiguriert sind) auf die Leistungsaufnahme
    abbildet (siehe technischer Teil für das konkrete Verfahren). Ergebnis:
    ein Koeffizient (Gewicht) pro Eingangsgröße.
@@ -257,6 +253,18 @@ Lauf nicht verhindern.
      Überschätzung, nie zu einer Unterschätzung der vorhergesagten Leistung.
    - Eine vorhergesagte Leistung darf nie negativ sein (physikalisch
      unsinnig) – negative Rohwerte werden auf 0 begrenzt.
+   - Nach oben ist die Vorhersage begrenzt, weil das lineare Modell bei
+     Bedingungen außerhalb des Trainingsbereichs (z. B. sehr kalte Tage)
+     sonst über die physikalisch mögliche Leistung hinaus extrapolieren
+     würde. Ist die optionale **maximale Leistung** konfiguriert (s. 1.5),
+     gilt ausschließlich diese harte Obergrenze (sie überstimmt die
+     dynamische, auch wenn im Training nie so hohe Werte vorkamen). Ist sie
+     nicht gesetzt, gilt eine **dynamische** Obergrenze: die höchste im
+     Training gemessene Leistung × 1,1. Sie wächst dadurch automatisch mit,
+     sobald das Training höhere gemessene Spitzen enthält.
+   - Die Kurve wird bewusst **nicht** aus der Vorhersage selbst nachgeführt
+     (Feedback-Loop: Training auf Modellausgaben statt Messwerten). Gelernt
+     wird ausschließlich aus gemessener Leistung (Training, s. 1.3).
 4. Ausgabe je Stunde: Zeitstempel, vorhergesagte Leistung (kW),
    Außentemperatur, Heiz-/Kühl-Freiheitsgradstunden (bereits auf Basis der
    24h-Innentemperatur, s. o.).
@@ -275,11 +283,12 @@ Pro Klimasystem konfigurierbar – bewusst minimal, entsprechend dem Ziel aus
 |---|---|---|
 | Name | ja | Bezeichnung des Systems |
 | Leistungssensor (kW) | ja | historisiert, Zielgröße des Trainings (Gesamtsystem – die Leistung wird ohnehin nur am Außengerät gemessen, s. 1.2) |
-| Wetter-Vorhersage-Entität | ja | Referenz auf eine bestehende HA-Entität im Forecast-Template-Format (s. 1.7); der dahinterliegende Wetterdienst ist für dieses System irrelevant |
+| Wetter-Vorhersage-Entität | ja | eine `weather.*`-Entität (Vorhersage wird per `weather.get_forecasts` abgefragt) **oder** eine Entität im Forecast-Template-Format (s. 1.7); der dahinterliegende Wetterdienst ist für dieses System irrelevant |
 | Standort (Breite/Länge) | ja, Default = Systemstandort | nur noch für den direkten Open-Meteo-Historie-Abruf (s. 1.7), nicht mehr für die Vorhersage |
 | Innentemperatur-Quelle | ja | ein Thermometer **oder** eine Klima-Entität (dann wird deren Ist-Temperatur-Attribut verwendet); repräsentativ fürs Gesamtsystem (s. 1.2) |
 | Vorhersagehorizont (Stunden) | nein, Default 72 | 6–168 |
 | Aktualisierungsintervall (Minuten) | nein, Default 30 | 5–360 |
+| Maximale Leistung (kW) | nein, kein Default | harte Obergrenze der Vorhersage; überstimmt die dynamische Obergrenze aus 1.4; im Options-Flow wieder leerbar |
 | Trainingszeitraum (Tage) | nein, Default 365 | 14–730, zusätzlich begrenzt durch die Verfügbarkeit des Leistungssensors (s. 1.6) |
 
 Bewusst **nicht mehr Teil der Konfiguration** (Historie dieser Entscheidung
@@ -348,11 +357,17 @@ externen Quellen bzw. per Fein-Historie-Abfrage ermittelt). Begründung:
 bewusst **getrennt** beschafft, mit unterschiedlichen Anforderungen:
 
 - **Vorhersage**: Dieses System betreibt selbst **keine
-  Wetterdienst-Anbindung** mehr. Es konsumiert stattdessen eine vom Nutzer
+  Wetterdienst-Anbindung** mehr. Ist die konfigurierte Entität eine
+  `weather.*`-Entität, wird die stündliche Vorhersage über den
+  Response-Service `weather.get_forecasts` (`type: hourly`) geholt – HA
+  stellt sie seit 2024.3 nicht mehr als State-Attribut bereit; die
+  Windgeschwindigkeit wird anhand von `wind_speed_unit` nach m/s
+  umgerechnet, Strahlung liefern diese Entitäten nicht. Für alle anderen
+  Entitäten (z. B. Template-Sensor) gilt: Es konsumiert eine vom Nutzer
   konfigurierte, bereits in HA vorhandene Entität in einem standardisierten
   Forecast-Template-Format (State = aktueller Wert, Attribut `forecast` =
   Liste künftiger Stundenwerte mit Zeitstempel, Temperatur und optional
-  Luftfeuchtigkeit/Globalstrahlung/Windgeschwindigkeit/Windrichtung – exaktes
+  Luftfeuchtigkeit/Windgeschwindigkeit/Windrichtung – exaktes
   Schema s. 1.2). Welcher Wetterdienst dahinter
   steckt und wie dessen natives Format in dieses Schema überführt wird, ist
   **nicht mehr Aufgabe dieses Systems**, sondern eines separaten,
@@ -613,7 +628,7 @@ undokumentierte APIs genutzt werden:
 > über Python's `sqlite3`, im Executor ausgeführt wie die heutigen
 > Recorder-Zugriffe, oder eine wachsende JSON-Struktur über den `Store`-
 > Helper) mit einer Zeile/einem Eintrag pro Stunde und Klimasystem
-> (`power_kw`, `indoor_temp`, `outdoor_temp`, `humidity`, `radiation`,
+> (`power_kw`, `indoor_temp`, `outdoor_temp`, `humidity`,
 > `wind_speed`, `wind_direction`):
 > - **Backfill** bei Einrichtung/erstem Training: ein `statistics_during_period`-
 >   Aufruf über den ganzen verfügbaren Zeitraum für Leistungssensor (und
@@ -678,7 +693,9 @@ damit HA dafür unbegrenzt Langzeitstatistik führt:
   – HAs Standardmechanismus für kleine, JSON-serialisierbare
   Konfigurations-/Zustandsdaten außerhalb der Recorder-Datenbank.
 - Gespeicherte Struktur: `coefficients` (dict), `r2`, `n_samples`,
-  `trained_at` (ISO-Zeitstempel, UTC), `feature_names`.
+  `trained_at` (ISO-Zeitstempel, UTC), `feature_names`,
+  `max_observed_kw` (höchste gemessene Leistung der Trainingsdaten, Basis der
+  dynamischen Obergrenze).
 
 ### 2.8 Regressionsverfahren
 
@@ -692,6 +709,16 @@ damit HA dafür unbegrenzt Langzeitstatistik führt:
 
 ### 2.9 Vorhersage-Berechnung (`forecast.py`)
 
+- Obergrenze: `compute_hour()` / `compute_forecast_series()` nehmen ein
+  optionales `max_kw` entgegen (Kappung nach der 0-Begrenzung). Der
+  Coordinator bestimmt es in `_effective_max_kw()`: konfigurierte
+  `max_power_kw`, sonst `max_observed_kw × DYNAMIC_CAP_HEADROOM` (1,1),
+  sonst keine Begrenzung (z. B. bei älteren Gewichten ohne
+  `max_observed_kw`).
+- Recorder: Das Attribut `forecast` des Vorhersage-Sensors ist per
+  `_unrecorded_attributes` vom Recorder ausgenommen, weil die Stundenreihe
+  sonst das 16-KB-Attributlimit überschreitet und der Recorder die
+  Attribute gar nicht speichert.
 - `compute_hour()` / `compute_forecast_series()`: reine Funktionen ohne
   HA-Bezug, nehmen `WeatherPoint`, `IndoorUnitPlan`-Liste, Koeffizienten-Dict
   und Nachtabsenkungs-Konfiguration entgegen.
@@ -836,7 +863,7 @@ aktualisierten Abschnitt 1 gegenüber dem heutigen Code mitbringen würde:**
 | `CONF_INDOOR_UNITS`-Liste, ein Climate-Mirror-Set (5 Sensoren) je Innengerät (2.6) | eine einzige historisierte Innentemperatur-Quelle je System |
 | Setpoint-/HVAC-Modus-/Aktiv-Tracking je Innengerät (`coordinator._collect_indoor_unit_plans`, `_resolve_hvac_mode`) | entfällt vollständig – Heiz-/Kühlfall ergibt sich rein aus dem Vorzeichen (Innentemperatur vs. Außentemperatur) |
 | `special_adjustments.py` (Nachtabsenkungs-Zeitfenster, Taktverlängerungs-Erfahrungswert) inkl. der zugehörigen Konfiguration in `const.py`/`config_flow.py` | entfällt vollständig – Wirkung steckt in der gemessenen Innentemperatur (s. 1.2) |
-| 8 Features (`FEATURE_NAMES` inkl. `active_units`, `night_setback_offset`, `duty_throttle_offset`) | 3–8 Features (`bias`, `heating_/cooling_degree_hours`, optional `shortwave_radiation`/`wind_speed`/`humidity`/`wind_direction` als sin/cos) |
+| 8 Features (`FEATURE_NAMES` inkl. `active_units`, `night_setback_offset`, `duty_throttle_offset`) | 3–8 Features (`bias`, `heating_/cooling_degree_hours`, optional `wind_speed`/`humidity`/`wind_direction` als sin/cos) |
 | `night_setback_active_entity` (bereits im heutigen Code totes Feld) | entfällt |
 | Energiezähler-Pflichtfeld (im heutigen Code bereits ungenutzt) | entfällt |
 | `weather/openmeteo.py`+`weather/dwd.py` decken sowohl Vorhersage als auch Historie ab | `openmeteo.py` bleibt (nur noch für die Historie), `dwd.py` entfällt aus diesem System (wandert in ein eigenständiges Mapper-Helper-Projekt) |

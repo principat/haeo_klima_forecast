@@ -6,7 +6,6 @@ SPECIFICATION.md section 1.2/1.3):
   bias                  - constant term (baseline/standby load)
   heating_degree_hours  - max(0, indoor_temp - outdoor_temp)
   cooling_degree_hours  - max(0, outdoor_temp - indoor_temp)
-  shortwave_radiation   - global radiation (W/m²)              [optional]
   wind_speed            - wind speed (m/s)                     [optional]
   humidity              - relative humidity (%)                [optional]
   wind_direction_sin/    - circular encoding of wind direction  [optional,
@@ -46,7 +45,6 @@ BASE_FEATURE_NAMES = ["bias", "heating_degree_hours", "cooling_degree_hours"]
 
 # HistoryStore field name -> feature name, for the simple 1:1 optional features.
 OPTIONAL_FIELD_FEATURES = {
-    "radiation": "shortwave_radiation",
     "wind_speed": "wind_speed",
     "humidity": "humidity",
 }
@@ -65,6 +63,7 @@ class TrainingResult:
     n_samples: int
     trained_at: str
     feature_names: list[str] = field(default_factory=list)
+    max_observed_kw: float | None = None
 
 
 class WeightStore:
@@ -84,6 +83,7 @@ class WeightStore:
                 "n_samples": result.n_samples,
                 "trained_at": result.trained_at,
                 "feature_names": result.feature_names,
+                "max_observed_kw": result.max_observed_kw,
             }
         )
 
@@ -116,8 +116,6 @@ def _row_to_features(row: dict, feature_names: list[str]) -> list[float] | None:
         "heating_degree_hours": max(0.0, indoor - outdoor),
         "cooling_degree_hours": max(0.0, outdoor - indoor),
     }
-    if row.get("radiation") is not None:
-        values["shortwave_radiation"] = row["radiation"]
     if row.get("wind_speed") is not None:
         values["wind_speed"] = row["wind_speed"]
     if row.get("humidity") is not None:
@@ -178,6 +176,7 @@ async def async_train_weights(hass: HomeAssistant, entry_id: str, config: dict, 
         n_samples=n_samples,
         trained_at=dt_util.utcnow().isoformat(),
         feature_names=feature_names,
+        max_observed_kw=float(np.max(y)),
     )
     _LOGGER.info(
         "HAEO Klima Forecast: weights recalculated (n=%s, R²=%.3f): %s",

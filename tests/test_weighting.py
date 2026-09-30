@@ -13,8 +13,8 @@ from custom_components.haeo_klima_forecast.weighting import (
 
 
 def test_select_optional_features_requires_minimum_coverage() -> None:
-    rows = [{"radiation": 100.0}, {"radiation": 110.0}, {}, {}]  # 50% coverage -> included
-    assert _select_optional_features(rows) == ["shortwave_radiation"]
+    rows = [{"humidity": 50.0}, {"humidity": 55.0}, {}, {}]  # 50% coverage -> included
+    assert _select_optional_features(rows) == ["humidity"]
 
     sparse_rows = [{"wind_speed": 3.0}, {}, {}, {}]  # 25% coverage -> excluded
     assert _select_optional_features(sparse_rows) == []
@@ -35,8 +35,8 @@ def test_row_to_features_computes_degree_hours() -> None:
 
 
 def test_row_to_features_returns_none_if_selected_feature_missing() -> None:
-    feature_names = BASE_FEATURE_NAMES + ["shortwave_radiation"]
-    row = {"indoor_temp": 20.0, "outdoor_temp": 5.0, "power_kw": 1.2}  # no radiation
+    feature_names = BASE_FEATURE_NAMES + ["humidity"]
+    row = {"indoor_temp": 20.0, "outdoor_temp": 5.0, "power_kw": 1.2}  # no humidity
 
     assert _row_to_features(row, feature_names) is None
 

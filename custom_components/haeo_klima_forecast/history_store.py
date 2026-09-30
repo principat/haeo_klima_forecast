@@ -7,7 +7,7 @@ only mirrored from the moment this integration was installed, this module
 maintains one small local table of hourly rows per config entry:
 
     {hour_iso: {"power_kw": ..., "indoor_temp": ..., "outdoor_temp": ...,
-                "humidity": ..., "radiation": ..., "wind_speed": ...,
+                "humidity": ..., "wind_speed": ...,
                 "wind_direction": ...}}
 
 Populated in two phases:
@@ -41,7 +41,6 @@ FIELDS = (
     "indoor_temp",
     "outdoor_temp",
     "humidity",
-    "radiation",
     "wind_speed",
     "wind_direction",
 )
@@ -231,7 +230,6 @@ async def async_sync_history(
         if weather is not None:
             row["outdoor_temp"] = weather.temperature_c
             row["humidity"] = weather.humidity_pct
-            row["radiation"] = weather.shortwave_radiation
             row["wind_speed"] = weather.wind_speed_ms
             row["wind_direction"] = weather.wind_direction_deg
 

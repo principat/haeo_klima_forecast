@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .base import WeatherPoint
-from .forecast_template import async_parse_forecast_entity
+from .forecast_template import async_get_forecast_points, async_parse_forecast_entity
 from .openmeteo import OpenMeteoHistoricalClient
 
-__all__ = ["WeatherPoint", "OpenMeteoHistoricalClient", "async_parse_forecast_entity"]
+__all__ = ["WeatherPoint", "OpenMeteoHistoricalClient", "async_parse_forecast_entity", "async_get_forecast_points"]

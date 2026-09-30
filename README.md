@@ -53,8 +53,9 @@ The model is deliberately simple and needs almost no configuration (see
   [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api),
   bounded by the power sensor's own available history.
 - **Forecast weather**: this integration does **not** talk to any weather
-  service itself. It reads an existing HA entity that already exposes a
-  forecast in a small, provider-independent shape:
+  service itself. Pick a `weather.*` entity (its hourly forecast is fetched
+  via `weather.get_forecasts`), or any other entity (e.g. a template sensor)
+  that exposes a forecast in a small, provider-independent shape:
 
   ```yaml
   state: 5.3   # current outdoor temperature (°C)
@@ -63,7 +64,6 @@ The model is deliberately simple and needs almost no configuration (see
       - time: "2026-09-23T14:00:00+00:00"
         value: 6.1        # outdoor temperature (°C), required
         humidity: 72      # %, optional
-        radiation: 210    # W/m², optional
         wind_speed: 3.4   # m/s, optional
         wind_direction: 180  # °, optional
       - ...
@@ -107,6 +107,13 @@ action:
   - service: haeo_klima_forecast.recalculate_weights
 ```
 
+## Forecast limit
+
+The forecast is never negative. The optional "Maximum power (kW)" setting is
+a hard upper limit and overrides everything else. Without it, the forecast is
+capped at the highest power measured in the training data x 1.1 (this grows
+automatically as the training data does).
+
 ## Entities
 
 - `sensor.<system>_power_forecast`: current state = forecast for the next
@@ -114,7 +121,7 @@ action:
   outdoor_temp, indoor_temp, heating/cooling_degree_hours).
 - `sensor.<system>_weights`: diagnostic sensor, state = R² of the last
   regression, attributes contain the individual coefficients and which
-  optional features (radiation/wind/humidity/wind direction) were included.
+  optional features (wind/humidity/wind direction) were included.
 - `button.<system>_recalculate_weights`: recalculates the weights of this
   system immediately.
 - `switch.<system>_weekly_weight_recalculation`: weekly automatic

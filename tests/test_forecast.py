@@ -30,19 +30,18 @@ def test_cooling_degree_hours_when_hotter_outside() -> None:
 def test_optional_features_only_applied_when_present_in_weather_point() -> None:
     coefficients = {
         "bias": 0.0,
-        "shortwave_radiation": 0.01,
         "wind_speed": 0.05,
         "humidity": 0.001,
     }
     with_extras = WeatherPoint(
-        timestamp=NOW, temperature_c=20.0, shortwave_radiation=100.0, wind_speed_ms=4.0, humidity_pct=60.0
+        timestamp=NOW, temperature_c=20.0, wind_speed_ms=4.0, humidity_pct=60.0
     )
     without_extras = WeatherPoint(timestamp=NOW, temperature_c=20.0)
 
     result_with = compute_hour(with_extras, indoor_temp=20.0, coefficients=coefficients)
     result_without = compute_hour(without_extras, indoor_temp=20.0, coefficients=coefficients)
 
-    assert result_with.predicted_kw == 0.01 * 100.0 + 0.05 * 4.0 + 0.001 * 60.0
+    assert result_with.predicted_kw == 0.05 * 4.0 + 0.001 * 60.0
     assert result_without.predicted_kw == 0.0
 
 
@@ -72,3 +71,10 @@ def test_compute_forecast_series_zips_weather_and_indoor_temps() -> None:
     series = compute_forecast_series(weather_points, indoor_temps, {"bias": 0.0, "heating_degree_hours": 1.0})
 
     assert [f.heating_degree_hours for f in series] == [20.0, 16.0]
+
+
+def test_max_kw_caps_forecast() -> None:
+    coefficients = {"bias": 0.0, "heating_degree_hours": 1.0}
+    cold = WeatherPoint(timestamp=NOW, temperature_c=0.0)
+    assert compute_hour(cold, 20.0, coefficients).predicted_kw == 20.0
+    assert compute_hour(cold, 20.0, coefficients, max_kw=5.0).predicted_kw == 5.0

@@ -18,6 +18,7 @@ from .const import (
     CONF_INDOOR_TEMP_SOURCE,
     CONF_LATITUDE,
     CONF_LONGITUDE,
+    CONF_MAX_POWER_KW,
     CONF_NAME,
     CONF_POWER_SENSOR,
     CONF_TRAINING_DAYS,
@@ -39,7 +40,7 @@ def _schema(defaults: dict) -> vol.Schema:
             ),
             vol.Required(
                 CONF_WEATHER_FORECAST_ENTITY, default=defaults.get(CONF_WEATHER_FORECAST_ENTITY)
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["weather", "sensor"])),
             vol.Required(
                 CONF_INDOOR_TEMP_SOURCE, default=defaults.get(CONF_INDOOR_TEMP_SOURCE)
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "climate"])),
@@ -52,6 +53,9 @@ def _schema(defaults: dict) -> vol.Schema:
                 CONF_UPDATE_INTERVAL_MIN,
                 default=defaults.get(CONF_UPDATE_INTERVAL_MIN, DEFAULT_UPDATE_INTERVAL_MIN),
             ): vol.All(vol.Coerce(int), vol.Range(min=5, max=360)),
+            vol.Optional(
+                CONF_MAX_POWER_KW, description={"suggested_value": defaults.get(CONF_MAX_POWER_KW)}
+            ): vol.All(vol.Coerce(float), vol.Range(min=0.1)),
             vol.Optional(
                 CONF_TRAINING_DAYS, default=defaults.get(CONF_TRAINING_DAYS, DEFAULT_TRAINING_DAYS)
             ): vol.All(vol.Coerce(int), vol.Range(min=14, max=730)),
@@ -87,5 +91,6 @@ class HaeoKlimaForecastOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input: dict | None = None):
         current = {**self.config_entry.data, **self.config_entry.options}
         if user_input is not None:
+            user_input.setdefault(CONF_MAX_POWER_KW, None)  # explicit None lets the user clear a limit set at setup
             return self.async_create_entry(title="", data=user_input)
         return self.async_show_form(step_id="init", data_schema=_schema(current))

@@ -31,6 +31,7 @@ class HaeoForecastSensor(HaeoBaseEntity, SensorEntity):
     custom optimizer) as a power forecast.
     """
 
+    _unrecorded_attributes = frozenset({"forecast"})
     _attr_native_unit_of_measurement = "kW"
     _attr_icon = "mdi:chart-timeline-variant"
 
@@ -76,5 +77,6 @@ class HaeoWeightsSensor(HaeoBaseEntity, SensorEntity):
             "coefficients": weights.get("coefficients", {}),
             "n_samples": weights.get("n_samples"),
             "trained_at": weights.get("trained_at"),
+            "max_observed_kw": weights.get("max_observed_kw"),
             "feature_names": weights.get("feature_names", []),
         }

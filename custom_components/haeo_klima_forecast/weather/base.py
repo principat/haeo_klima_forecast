@@ -18,7 +18,6 @@ class WeatherPoint:
 
     timestamp: datetime
     temperature_c: float
-    shortwave_radiation: float | None = None  # W/m², global radiation / GHI
     wind_speed_ms: float | None = None
     wind_direction_deg: float | None = None
     humidity_pct: float | None = None
