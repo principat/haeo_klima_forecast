@@ -1,6 +1,23 @@
 # CHANGELOG
 
 
+## v1.1.0 (2026-09-30)
+
+### Features
+
+- Read weather.* via get_forecasts, optional max power cap, drop radiation
+  ([`87793da`](https://github.com/principat/haeo_klima_forecast/commit/87793da93faa6b9ea85d2754fe1cb9e6fc509cb8))
+
+- Read hourly forecast of weather.* entities through weather.get_forecasts (no forecast attribute
+  since HA 2024.3); template sensors still use the attribute path - Add optional max_power_kw hard
+  cap; without it, cap the forecast at the highest trained power * 1.1 (max_observed_kw stored with
+  the weights) - Remove shortwave radiation feature entirely - Exclude the large forecast attribute
+  from the recorder (16 KB limit) - Raise a clear UpdateFailed for entries missing
+  weather_forecast_entity - Update spec and README
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+
 ## v1.0.0 (2026-09-24)
 
 ### Features
