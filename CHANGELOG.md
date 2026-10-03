@@ -1,6 +1,33 @@
 # CHANGELOG
 
 
+## v1.2.0 (2026-10-03)
+
+### Bug Fixes
+
+- Fill indoor temperature gaps from the state history
+  ([`795aec7`](https://github.com/principat/haeo_klima_forecast/commit/795aec7c6a8525ba53b5f43065fc845e06275e59))
+
+Carry the last known climate state forward over hours without a state change and backfill missing
+  indoor_temp of stored hours, on every sync and before recalculating weights.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+### Documentation
+
+- Update specification for setup wait, indoor gap fill and trained-at sensor
+  ([`8490119`](https://github.com/principat/haeo_klima_forecast/commit/84901197323e8a2bb39bf0cef2742e2f258e46aa))
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+### Features
+
+- Add diagnostic sensor for the last weight calculation time
+  ([`a07aa6f`](https://github.com/principat/haeo_klima_forecast/commit/a07aa6f1e293279e02f73deb1595056905390663))
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+
 ## v1.1.1 (2026-10-03)
 
 ### Bug Fixes
