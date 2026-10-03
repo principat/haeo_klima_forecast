@@ -350,6 +350,13 @@ externen Quellen bzw. per Fein-Historie-Abfrage ermittelt). Begründung:
   noch verfügbaren Rohhistorie dieses Zustands verwendet (typischerweise nur
   wenige Tage rückwirkend verfügbar) – darüber hinaus bleibt die Stunde ohne
   Wert und wird vom Training ausgeschlossen (s. 1.3).
+- Ein Zustand gilt, bis er sich ändert: Stunden ohne Zustandswechsel in der
+  Rohhistorie übernehmen den **zuletzt bekannten Wert** (Vorwärtsfüllung),
+  statt ohne Wert zu bleiben. Bereits gespeicherte Stunden mit Leistungs-,
+  aber ohne Innentemperaturwert werden bei jedem täglichen Abgleich und vor
+  jedem Training nachträglich aus der Rohhistorie ergänzt; vorhandene Werte
+  werden dabei nie überschrieben. Rückwirkend ist das nur so weit möglich,
+  wie die Rohhistorie reicht (`recorder.purge_keep_days`).
 
 ### 1.7 Fachliche Anforderungen an Wetterdaten-Beschaffung
 
@@ -398,7 +405,8 @@ Für jedes Klimasystem muss jederzeit einsehbar sein:
 - die aktuell wirksamen Gewichte (pro Einflussgröße),
 - die Modellgüte (R²) des letzten Trainings,
 - Anzahl der genutzten Trainings-Datenpunkte,
-- Zeitpunkt des letzten Trainings.
+- Zeitpunkt des letzten Trainings (als eigene Zeitstempel-Entität; `unknown`, solange noch nie
+  trainiert wurde).
 
 ### 1.9 Bewusste fachliche Einschränkungen und Entscheidungshistorie
 
@@ -556,6 +564,12 @@ hängen an Home Assistant.
 - `HaeoForecastCoordinator(DataUpdateCoordinator)`, ein Coordinator pro
   Config Entry, `update_interval` aus der Konfiguration.
 - `_async_update_data()`:
+  0. (Setup, `__init__.py`) Ist eine Wetter-Entität konfiguriert und liefert sie
+     noch keine Vorhersage, wirft `async_setup_entry` `ConfigEntryNotReady`;
+     HA wiederholt das Setup mit Backoff, bis Daten da sind. So werden
+     Sensoren nicht leer geladen (HAEO würde sonst auf Daten warten). Liefert
+     die Wetter-Entität später keine Punkte mehr, wirft `_async_update_data`
+     `UpdateFailed` statt einer leeren Prognose.
   1. lädt gespeicherte Gewichte (Cache oder `WeightStore`); fehlen sie,
      wird `UpdateFailed` geworfen (führt zu "unavailable"-Sensoren, blockiert
      aber **nicht** das Laden der übrigen Entities/Setup des Config Entry –
@@ -798,6 +812,7 @@ damit HA dafür unbegrenzt Langzeitstatistik führt:
 |---|---|---|---|
 | Vorhersage | `sensor` | `{entry_id}_forecast` | normal |
 | Gewichte/Diagnose | `sensor` | `{entry_id}_weights` | diagnostic |
+| Zeitpunkt letzte Gewichtsberechnung | `sensor` (`timestamp`) | `{entry_id}_weights_trained_at` | diagnostic |
 | Recalculate-Button | `button` | `{entry_id}_recalculate_weights` | normal |
 | Weekly-Recalc-Switch | `switch` | `{entry_id}_auto_recalculate_weights` | config |
 | Climate-Mirror (5×/Innengerät) | `sensor` | `haeo_klima_forecast_mirror_{climate_entity_id}_{suffix}` | hidden, diagnostic |
