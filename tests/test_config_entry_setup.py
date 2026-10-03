@@ -92,3 +92,34 @@ async def test_setup_waits_until_weather_forecast_is_available(hass, monkeypatch
 
     assert entry.state is ConfigEntryState.LOADED
     assert hass.states.get("sensor.test_system_power_forecast") is not None
+
+
+async def test_weights_last_calculated_is_unknown_until_calculated(hass, monkeypatch) -> None:
+    async def _no_op_historical(self, start, end):
+        return []
+
+    monkeypatch.setattr(
+        "custom_components.haeo_klima_forecast.weather.openmeteo.OpenMeteoHistoricalClient.async_get_historical",
+        _no_op_historical,
+    )
+    hass.states.async_set("sensor.house_power", "1.2", {"device_class": "power"})
+    hass.states.async_set("climate.living_room", "heat", {"current_temperature": 20.5})
+    hass.states.async_set(
+        "sensor.weather_forecast", "5.0", {"forecast": [{"time": "2026-01-01T00:00:00+00:00", "value": 4.0}]}
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_NAME: "Test System",
+            CONF_POWER_SENSOR: "sensor.house_power",
+            CONF_WEATHER_FORECAST_ENTITY: "sensor.weather_forecast",
+            CONF_INDOOR_TEMP_SOURCE: "climate.living_room",
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_system_weights_last_calculated")
+    assert state is not None
+    assert state.state == "unknown"

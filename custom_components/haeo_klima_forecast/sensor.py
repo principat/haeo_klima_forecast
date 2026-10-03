@@ -1,10 +1,11 @@
 """Sensor entities: forecast output and diagnostic weights sensor for HAEO/energy optimization."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import HaeoForecastCoordinator
@@ -18,6 +19,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         [
             HaeoForecastSensor(coordinator, entry),
             HaeoWeightsSensor(coordinator, entry),
+            HaeoWeightsTrainedAtSensor(coordinator, entry),
         ]
     )
 
@@ -80,3 +82,26 @@ class HaeoWeightsSensor(HaeoBaseEntity, SensorEntity):
             "max_observed_kw": weights.get("max_observed_kw"),
             "feature_names": weights.get("feature_names", []),
         }
+
+
+class HaeoWeightsTrainedAtSensor(HaeoBaseEntity, SensorEntity):
+    """Diagnostic sensor: when the weights were last calculated."""
+
+    _attr_icon = "mdi:clock-check-outline"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: HaeoForecastCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_weights_trained_at"
+        self._attr_name = f"{self._system_name} Weights Last Calculated"
+
+    @property
+    def available(self) -> bool:
+        # Independent of forecast updates: "never calculated" is a valid state (unknown).
+        return True
+
+    @property
+    def native_value(self):
+        trained_at = (self.coordinator.weights or {}).get("trained_at")
+        return dt_util.parse_datetime(trained_at) if trained_at else None

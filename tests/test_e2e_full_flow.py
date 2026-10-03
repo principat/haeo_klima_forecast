@@ -38,6 +38,7 @@ from homeassistant.components.recorder.models.statistics import (
 from homeassistant.components.recorder.statistics import async_import_statistics
 from homeassistant.const import UnitOfPower, UnitOfTemperature
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import PowerConverter, TemperatureConverter
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
@@ -192,6 +193,10 @@ async def test_full_user_journey_config_flow_backfill_training_and_forecast(
     coefficients = weights_state.attributes["coefficients"]
     assert coefficients["heating_degree_hours"] > 0
     assert weights_state.attributes["n_samples"] >= len(coefficients) + 5
+
+    trained_at_state = hass.states.get("sensor.e2e_climate_system_weights_last_calculated")
+    assert trained_at_state is not None
+    assert trained_at_state.state == dt_util.parse_datetime(weights_state.attributes["trained_at"]).isoformat()
 
     forecast_state = hass.states.get("sensor.e2e_climate_system_power_forecast")
     assert forecast_state is not None

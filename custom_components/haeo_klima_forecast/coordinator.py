@@ -78,6 +78,11 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(minutes=update_minutes),
         )
 
+    @property
+    def weights(self) -> dict | None:
+        """Most recently loaded or calculated weights, None if never calculated."""
+        return self._weights_cache
+
     def async_start_background_jobs(self) -> None:
         """Starts the daily HistoryStore sync and, if needed, the hourly indoor-temp sampler.
 

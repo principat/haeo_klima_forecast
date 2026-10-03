@@ -122,6 +122,8 @@ automatically as the training data does).
 - `sensor.<system>_weights`: diagnostic sensor, state = R² of the last
   regression, attributes contain the individual coefficients and which
   optional features (wind/humidity/wind direction) were included.
+- `sensor.<system>_weights_last_calculated`: diagnostic timestamp sensor,
+  shows when the weights were last calculated (`unknown` if never).
 - `button.<system>_recalculate_weights`: recalculates the weights of this
   system immediately.
 - `switch.<system>_weekly_weight_recalculation`: weekly automatic
