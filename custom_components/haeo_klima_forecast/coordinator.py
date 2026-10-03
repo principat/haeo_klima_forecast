@@ -157,6 +157,10 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
         weather_points = await async_get_forecast_points(
             self.hass, self.config[CONF_WEATHER_FORECAST_ENTITY], hours
         )
+        if not weather_points:
+            raise UpdateFailed(
+                f"No weather forecast available yet from '{self.config[CONF_WEATHER_FORECAST_ENTITY]}'"
+            )
 
         indoor_temps = await self._async_resolve_indoor_temps(weather_points)
 

@@ -4,11 +4,20 @@ from __future__ import annotations
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
-from .const import ATTR_CONFIG_ENTRY_ID, DOMAIN, PLATFORMS, SERVICE_RECALCULATE_WEIGHTS
+from .const import (
+    ATTR_CONFIG_ENTRY_ID,
+    CONF_FORECAST_HOURS,
+    CONF_WEATHER_FORECAST_ENTITY,
+    DEFAULT_FORECAST_HOURS,
+    DOMAIN,
+    PLATFORMS,
+    SERVICE_RECALCULATE_WEIGHTS,
+)
 from .coordinator import HaeoForecastCoordinator
+from .weather.forecast_template import async_get_forecast_points
 
 SERVICE_SCHEMA = vol.Schema(
     {
@@ -18,6 +27,17 @@ SERVICE_SCHEMA = vol.Schema(
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    config = {**entry.data, **entry.options}
+    weather_entity = config.get(CONF_WEATHER_FORECAST_ENTITY)
+    if weather_entity is not None:
+        # Do not load the integration until the weather forecast is available, otherwise
+        # the sensors stay empty and HAEO hangs waiting for data. HA retries with backoff.
+        hours = config.get(CONF_FORECAST_HOURS, DEFAULT_FORECAST_HOURS)
+        if not await async_get_forecast_points(hass, weather_entity, hours):
+            raise ConfigEntryNotReady(
+                f"Weather forecast of '{weather_entity}' is not available yet"
+            )
+
     coordinator = HaeoForecastCoordinator(hass, entry)
 
     hass.data.setdefault(DOMAIN, {})
