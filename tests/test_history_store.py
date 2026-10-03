@@ -211,3 +211,50 @@ async def test_sync_history_incremental_does_not_query_indoor_temp_for_climate_s
     assert row["indoor_temp"] == 21.0  # kept from the sampler
     assert row["power_kw"] == 1.4
     assert row["outdoor_temp"] == 6.0
+
+
+def test_forward_fill_carries_last_state_over_hours_without_change() -> None:
+    start = datetime(2026, 1, 1, 0, tzinfo=timezone.utc)
+    samples = [
+        (datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc), 20.0),  # state at start
+        (datetime(2026, 1, 1, 3, 30, tzinfo=timezone.utc), 22.0),
+    ]
+
+    result = hs._hourly_mean_forward_fill(samples, start, start + timedelta(hours=5))
+
+    assert [result[start + timedelta(hours=h)] for h in range(6)] == [20.0, 20.0, 20.0, 22.0, 22.0, 22.0]
+
+
+def test_forward_fill_uses_state_before_start() -> None:
+    start = datetime(2026, 1, 1, 5, tzinfo=timezone.utc)
+    samples = [(datetime(2025, 12, 31, 12, tzinfo=timezone.utc), 19.5)]
+
+    result = hs._hourly_mean_forward_fill(samples, start, start + timedelta(hours=1))
+
+    assert result == {start: 19.5, start + timedelta(hours=1): 19.5}
+
+
+async def test_backfill_indoor_fills_only_missing_values(hass, monkeypatch) -> None:
+    now = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+    h1, h2, h3 = (now - timedelta(hours=n) for n in (3, 2, 1))
+    store = HistoryStore(hass, ENTRY_ID)
+    await store.async_merge(
+        {
+            h1.isoformat(): {"power_kw": 1.0},
+            h2.isoformat(): {"power_kw": 1.0, "indoor_temp": 18.0},
+            h3.isoformat(): {"power_kw": 1.0},
+        }
+    )
+
+    async def fake_raw_hourly_mean(hass_, entity_id, start, end, attribute=None):
+        return {h1: 21.0, h2: 99.0, h3: 21.5}
+
+    monkeypatch.setattr(hs, "_fetch_raw_hourly_mean", fake_raw_hourly_mean)
+
+    filled = await hs.async_backfill_indoor_from_state(hass, store, "climate.x", "current_temperature", 30)
+
+    rows = await store.async_load()
+    assert filled == 2
+    assert rows[h1.isoformat()]["indoor_temp"] == 21.0
+    assert rows[h2.isoformat()]["indoor_temp"] == 18.0  # never overwritten
+    assert rows[h3.isoformat()]["indoor_temp"] == 21.5

@@ -34,7 +34,12 @@ from .const import (
     HISTORY_SYNC_MINUTE,
 )
 from .forecast import compute_forecast_series
-from .history_store import HistoryStore, async_sample_indoor_temperature_now, async_sync_history
+from .history_store import (
+    HistoryStore,
+    async_backfill_indoor_from_state,
+    async_sample_indoor_temperature_now,
+    async_sync_history,
+)
 from .weather.forecast_template import async_get_forecast_points
 from .weighting import WeightStore, async_train_weights
 
@@ -135,6 +140,22 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
             _LOGGER.exception("HAEO Klima Forecast: HistoryStore sync failed")
         finally:
             await session.close()
+        await self._async_backfill_indoor()
+
+    async def _async_backfill_indoor(self) -> None:
+        entity_id, attribute = _indoor_temp_source(self.config)
+        if entity_id is None or attribute is None:
+            return
+        try:
+            await async_backfill_indoor_from_state(
+                self.hass,
+                self.history_store,
+                entity_id,
+                attribute,
+                self.config.get(CONF_TRAINING_DAYS, DEFAULT_TRAINING_DAYS),
+            )
+        except Exception:  # noqa: BLE001 - best effort, must not break sync/training
+            _LOGGER.exception("HAEO Klima Forecast: indoor temperature backfill failed")
 
     async def _async_update_data(self) -> dict:
         weights = self._weights_cache or await self.weight_store.async_load()
@@ -219,6 +240,7 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
     async def async_recalculate_weights(self) -> None:
         """Called by the `haeo_klima_forecast.recalculate_weights` service."""
         training_days = self.config.get(CONF_TRAINING_DAYS, DEFAULT_TRAINING_DAYS)
+        await self._async_backfill_indoor()
         result = await async_train_weights(self.hass, self.entry.entry_id, self.config, training_days)
         await self.weight_store.async_save(result)
         self._weights_cache = {

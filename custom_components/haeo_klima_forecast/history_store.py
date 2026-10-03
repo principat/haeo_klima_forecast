@@ -161,13 +161,69 @@ async def _fetch_raw_hourly_mean(
         except (ValueError, TypeError):
             continue
 
-    marks = _hourly_marks(start, end)
-    buckets: dict[datetime, list[float]] = {m: [] for m in marks}
-    for ts, value in samples:
-        mark = ts.replace(minute=0, second=0, microsecond=0)
-        if mark in buckets:
-            buckets[mark].append(value)
-    return {mark: sum(values) / len(values) for mark, values in buckets.items() if values}
+    return _hourly_mean_forward_fill(samples, start, end)
+
+
+def _hourly_mean_forward_fill(
+    samples: list[tuple[datetime, float]], start: datetime, end: datetime
+) -> dict[datetime, float]:
+    """Hourly mean of the samples; hours without a state change carry the last known value.
+
+    A state keeps its value until the next change (the first sample is the
+    state at `start`, see include_start_time_state).
+    """
+    samples = sorted(samples, key=lambda sample: sample[0])
+    result: dict[datetime, float] = {}
+    last_value: float | None = None
+    idx = 0
+    for mark in _hourly_marks(start, end):
+        hour_end = mark + timedelta(hours=1)
+        in_hour: list[float] = []
+        while idx < len(samples) and samples[idx][0] < hour_end:
+            if samples[idx][0] >= mark:
+                in_hour.append(samples[idx][1])
+            last_value = samples[idx][1]
+            idx += 1
+        if in_hour:
+            result[mark] = sum(in_hour) / len(in_hour)
+        elif last_value is not None:
+            result[mark] = last_value
+    return result
+
+
+async def async_backfill_indoor_from_state(
+    hass: HomeAssistant, store: HistoryStore, entity_id: str, attribute: str, max_lookback_days: int
+) -> int:
+    """Fills `indoor_temp` of already stored hours from the entity's raw state history.
+
+    Covers hours that have power data but no indoor temperature (e.g. the
+    backfill only saw hours with a state change, or HA was down during the
+    hourly sampling). Existing indoor values are never overwritten. Returns
+    the number of filled hours; bounded by `recorder.purge_keep_days`.
+    """
+    rows = await store.async_load()
+    earliest = (dt_util.utcnow() - timedelta(days=max_lookback_days)).isoformat()
+    missing = [
+        key
+        for key, row in rows.items()
+        if key >= earliest and row.get("power_kw") is not None and row.get("indoor_temp") is None
+    ]
+    if not missing:
+        return 0
+
+    start = dt_util.parse_datetime(min(missing))
+    end = dt_util.parse_datetime(max(missing))
+    by_hour = await _fetch_raw_hourly_mean(hass, entity_id, start, end, attribute=attribute)
+
+    new_rows: dict[str, dict] = {}
+    for key in missing:
+        value = by_hour.get(dt_util.parse_datetime(key))
+        if value is not None:
+            new_rows[key] = {**rows[key], "indoor_temp": value}
+    if new_rows:
+        await store.async_merge(new_rows)
+        _LOGGER.info("HAEO Klima Forecast: filled indoor temperature of %s hour(s) from state history", len(new_rows))
+    return len(new_rows)
 
 
 async def async_sync_history(
