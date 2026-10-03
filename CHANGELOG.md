@@ -1,6 +1,26 @@
 # CHANGELOG
 
 
+## v1.1.1 (2026-10-03)
+
+### Bug Fixes
+
+- Wait for weather forecast before loading the config entry
+  ([`1f14750`](https://github.com/principat/haeo_klima_forecast/commit/1f147500fcb27f37956699348a51361d0af61d42))
+
+Raise ConfigEntryNotReady in setup while the weather entity provides no forecast, so HA retries
+  instead of loading with empty sensors. Raise UpdateFailed in the coordinator on an empty forecast.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+### Chores
+
+- Add devcontainer for tests, ignore local Claude settings
+  ([`0123907`](https://github.com/principat/haeo_klima_forecast/commit/0123907b01c8a4a165fa9a1e30ebdd62035519f0))
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+
 ## v1.1.0 (2026-09-30)
 
 ### Features
