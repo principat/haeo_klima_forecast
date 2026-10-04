@@ -1,6 +1,16 @@
 # CHANGELOG
 
 
+## v1.4.1 (2026-10-04)
+
+### Bug Fixes
+
+- Serve history export as signed download without writing files
+  ([`6b98bd8`](https://github.com/principat/haeo_klima_forecast/commit/6b98bd8d58bff8ef26bf5b8b0737e936c49f4a21))
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+
 ## v1.4.0 (2026-10-04)
 
 ### Features
