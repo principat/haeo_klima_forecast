@@ -1,6 +1,16 @@
 # CHANGELOG
 
 
+## v1.4.0 (2026-10-04)
+
+### Features
+
+- Download link for the history export
+  ([`494ac5f`](https://github.com/principat/haeo_klima_forecast/commit/494ac5fb920f363202315ff812a06dc05053e2a9))
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+
 ## v1.3.0 (2026-10-04)
 
 ### Features
