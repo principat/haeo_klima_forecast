@@ -245,7 +245,10 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
     async def async_recalculate_weights(self) -> None:
         """Called by the `haeo_klima_forecast.recalculate_weights` service."""
         training_days = self.config.get(CONF_TRAINING_DAYS, DEFAULT_TRAINING_DAYS)
-        await self._async_backfill_indoor()
+        if CONF_POWER_SENSOR in self.config and CONF_WEATHER_FORECAST_ENTITY in self.config:
+            await self._async_sync_history()  # includes the indoor backfill
+        else:
+            await self._async_backfill_indoor()
         result = await async_train_weights(self.hass, self.entry.entry_id, self.config, training_days)
         await self.weight_store.async_save(result)
         self._weights_cache = {

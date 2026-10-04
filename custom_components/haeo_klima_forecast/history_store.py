@@ -86,10 +86,12 @@ class HistoryStore:
         Deliberately distinct from `async_latest_hour()`: the hourly
         indoor-temperature sampler (see `async_sample_indoor_temperature_now`)
         writes partial rows for recent hours independently, which must not
-        make the daily sync think those hours are already done.
+        make the daily sync think those hours are already done. Rows with
+        power but no outdoor temperature (weather was unavailable then) are
+        not done either, so the next sync retries them.
         """
         rows = await self.async_load()
-        synced_keys = [key for key, row in rows.items() if "power_kw" in row]
+        synced_keys = [key for key, row in rows.items() if "power_kw" in row and row.get("outdoor_temp") is not None]
         if not synced_keys:
             return None
         return dt_util.parse_datetime(max(synced_keys))

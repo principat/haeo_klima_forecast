@@ -18,6 +18,7 @@ from .base import WeatherPoint
 _LOGGER = logging.getLogger(__name__)
 
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"  # also serves the last ~92 days of past data
 
 HOURLY_VARS = (
     "temperature_2m,wind_speed_10m,wind_direction_10m,"
@@ -39,35 +40,46 @@ class OpenMeteoHistoricalClient:
         self.session = session
 
     async def async_get_historical(self, start: datetime, end: datetime) -> list[WeatherPoint]:
+        """Archive API for the settled part, forecast API (past data) for the last days.
+
+        The archive lags a few days behind; the most recent hours come from
+        the forecast API's model analysis instead, so a fresh installation
+        does not have to wait days until its newest hours become usable.
+        """
         latest_available = datetime.now(timezone.utc) - timedelta(days=ARCHIVE_DELAY_DAYS)
-        effective_end = min(end, latest_available)
+        by_time: dict[datetime, WeatherPoint] = {}
 
-        if start >= effective_end:
-            _LOGGER.warning(
-                "HAEO Klima Forecast: requested period (%s to %s) lies "
-                "entirely within the Open-Meteo archive delay of %s days "
-                "and cannot be queried - no weather data will be provided "
-                "for this part.",
-                start,
-                end,
-                ARCHIVE_DELAY_DAYS,
-            )
-            return []
+        if start < latest_available:
+            data = await self._request(ARCHIVE_URL, self._params(start, min(end, latest_available)))
+            by_time.update((p.timestamp, p) for p in self._parse(data))
 
-        params = {
+        recent_start = max(start, latest_available)
+        if recent_start <= end:
+            try:
+                data = await self._request(FORECAST_URL, self._params(recent_start, end))
+                for p in self._parse(data):
+                    by_time.setdefault(p.timestamp, p)  # archive wins where both exist
+            except aiohttp.ClientError as err:
+                _LOGGER.warning(
+                    "HAEO Klima Forecast: no recent weather data from Open-Meteo (%s to %s): %s",
+                    recent_start,
+                    end,
+                    err,
+                )
+        return [p for t, p in sorted(by_time.items()) if start <= t <= end]
+
+    def _params(self, start: datetime, end: datetime) -> dict:
+        return {
             "latitude": self.latitude,
             "longitude": self.longitude,
             "hourly": HOURLY_VARS,
             "start_date": start.date().isoformat(),
-            "end_date": effective_end.date().isoformat(),
+            "end_date": end.date().isoformat(),
             "timezone": "UTC",
         }
-        data = await self._request(params)
-        points = self._parse(data)
-        return [p for p in points if start <= p.timestamp <= effective_end]
 
-    async def _request(self, params: dict) -> dict:
-        async with self.session.get(ARCHIVE_URL, params=params) as resp:
+    async def _request(self, url: str, params: dict) -> dict:
+        async with self.session.get(url, params=params) as resp:
             if resp.status >= 400:
                 # On 400-level errors, Open-Meteo returns a JSON body with a
                 # "reason" field - that helps debugging far more than the

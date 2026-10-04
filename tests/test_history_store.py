@@ -40,6 +40,18 @@ async def test_latest_hour_and_rows_since(hass) -> None:
     assert list(since.keys()) == ["2026-01-02T00:00:00+00:00"]
 
 
+async def test_latest_synced_hour_ignores_rows_without_weather(hass) -> None:
+    store = HistoryStore(hass, ENTRY_ID)
+    await store.async_merge(
+        {
+            "2026-01-01T00:00:00+00:00": {"power_kw": 1.0, "outdoor_temp": 3.0},
+            "2026-01-01T01:00:00+00:00": {"power_kw": 2.0},  # weather was unavailable
+        }
+    )
+
+    assert await store.async_latest_synced_hour() == datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
 async def test_merge_caps_stored_hours(hass, monkeypatch) -> None:
     monkeypatch.setattr(hs, "MAX_STORED_HOURS", 2)
     store = HistoryStore(hass, ENTRY_ID)
