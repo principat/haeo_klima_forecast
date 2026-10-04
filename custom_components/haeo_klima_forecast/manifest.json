@@ -3,6 +3,7 @@
   "name": "HAEO Klima Forecast",
   "codeowners": ["@principat"],
   "config_flow": true,
+  "dependencies": ["http"],
   "documentation": "https://github.com/principat/haeo_klima_forecast",
   "integration_type": "hub",
   "iot_class": "calculated",

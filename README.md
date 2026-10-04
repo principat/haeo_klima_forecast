@@ -130,7 +130,8 @@ automatically as the training data does).
   system immediately.
 - `button.<system>_export_history` / service `haeo_klima_forecast.export_history`:
   writes the stored hourly training data (power, temperatures, humidity,
-  wind) as CSV to `<config>/haeo_klima_forecast_export/<system>_history.csv`.
+  wind) as CSV to `<config>/haeo_klima_forecast_export/<system>_history.csv`
+  and shows a notification with a download link (valid for 10 minutes).
 - `switch.<system>_weekly_weight_recalculation`: weekly automatic
   recalculation (Sunday 03:30) on/off.
 

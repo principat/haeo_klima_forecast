@@ -127,7 +127,7 @@ async def test_weights_last_calculated_is_unknown_until_calculated(hass, monkeyp
     assert state.state == "unknown"
 
 
-async def test_export_history_service_and_button_write_csv(hass, monkeypatch) -> None:
+async def test_export_history_service_and_button_write_csv(hass, hass_client, monkeypatch) -> None:
     async def _no_op_historical(self, start, end):
         return []
 
@@ -175,3 +175,14 @@ async def test_export_history_service_and_button_write_csv(hass, monkeypatch) ->
     await hass.services.async_call(
         "button", "press", {"entity_id": "button.test_system_export_history"}, blocking=True
     )
+
+    client = await hass_client()
+    response = await client.get(f"/api/{DOMAIN}/export/{entry.entry_id}")
+    assert response.status == 200
+    assert "attachment" in response.headers["Content-Disposition"]
+    body = await response.text()
+    assert body.splitlines()[1] == "2026-01-01T00:00:00+00:00,1.0,20.0,4.0,,,"
+    assert (await client.get(f"/api/{DOMAIN}/export/unknown")).status == 404
+
+    notification = hass.data["persistent_notification"][f"{DOMAIN}_export_{entry.entry_id}"]
+    assert f"/api/{DOMAIN}/export/{entry.entry_id}?authSig=" in notification["message"]

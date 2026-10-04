@@ -37,6 +37,7 @@ from .const import (
     HISTORY_SYNC_HOUR,
     HISTORY_SYNC_MINUTE,
 )
+from .download import signed_download_path
 from .forecast import compute_forecast_series
 from .history_store import (
     HistoryStore,
@@ -265,7 +266,9 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
         _LOGGER.info("HAEO Klima Forecast: exported %s hour(s) to %s", len(rows), path)
         persistent_notification.async_create(
             self.hass,
-            f"{len(rows)} hourly rows exported to `{path}`.",
+            f"{len(rows)} hourly rows exported to `{path}`.\n\n"
+            f"[Download CSV]({signed_download_path(self.hass, self.entry.entry_id)}) "
+            "(link valid for 10 minutes; press the export button again for a new one)",
             title=f"{self.entry.title}: history exported",
             notification_id=f"{DOMAIN}_export_{self.entry.entry_id}",
         )

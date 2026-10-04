@@ -18,7 +18,10 @@ from .const import (
     SERVICE_RECALCULATE_WEIGHTS,
 )
 from .coordinator import HaeoForecastCoordinator
+from .download import HaeoExportDownloadView
 from .weather.forecast_template import async_get_forecast_points
+
+_VIEW_REGISTERED = f"{DOMAIN}_download_view_registered"  # views cannot be unregistered
 
 SERVICE_SCHEMA = vol.Schema(
     {
@@ -43,6 +46,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
+    if not hass.data.get(_VIEW_REGISTERED):
+        hass.http.register_view(HaeoExportDownloadView(hass))
+        hass.data[_VIEW_REGISTERED] = True
 
     # async_refresh() (instead of async_config_entry_first_refresh()) is allowed to
     # fail, e.g. because no weights exist yet - this does NOT abort setup. The user
