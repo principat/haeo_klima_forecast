@@ -1,6 +1,26 @@
 # CHANGELOG
 
 
+## v1.3.0 (2026-10-04)
+
+### Features
+
+- Export stored history as CSV (service and button), update specification
+  ([`43e4ba1`](https://github.com/principat/haeo_klima_forecast/commit/43e4ba1bf29061dced90c45ff2828977ff4947f0))
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+- Time-of-day and piecewise-linear model, estimate missing indoor temperature
+  ([`f8bc0ea`](https://github.com/principat/haeo_klima_forecast/commit/f8bc0eada6c36f2f4ec3cceeaf04e1252b5a3f8c))
+
+Add local time of day (sin/cos) and outdoor-temperature breakpoints to the regression so the unit's
+  schedule and modulation band are covered. Hours without a measured indoor temperature use the mean
+  of the measured ones for training only. Training runs in the executor and reports the daily energy
+  error as a quality figure. tmp/ is ignored.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+
 ## v1.2.1 (2026-10-04)
 
 ### Bug Fixes
