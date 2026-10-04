@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v1.2.1 (2026-10-04)
+
+### Bug Fixes
+
+- Retry hours without weather and use forecast API for the last days
+  ([`87d7957`](https://github.com/principat/haeo_klima_forecast/commit/87d79579dd0130f3f6b736c8a934d55c42fc8080))
+
+Open-Meteo's archive lags 5 days; those hours were marked synced without outdoor temperature and
+  never retried, leaving too few training rows. Now the forecast API fills the recent days,
+  incomplete hours are re-synced, and the manual recalculation syncs the history first.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+
 ## v1.2.0 (2026-10-03)
 
 ### Bug Fixes
