@@ -127,7 +127,7 @@ async def test_weights_last_calculated_is_unknown_until_calculated(hass, monkeyp
     assert state.state == "unknown"
 
 
-async def test_export_history_service_and_button_write_csv(hass, hass_client, monkeypatch) -> None:
+async def test_export_history_offers_signed_csv_download(hass, hass_client_no_auth, monkeypatch) -> None:
     async def _no_op_historical(self, start, end):
         return []
 
@@ -166,23 +166,29 @@ async def test_export_history_service_and_button_write_csv(hass, hass_client, mo
 
     response = await hass.services.async_call(DOMAIN, "export_history", {}, blocking=True, return_response=True)
 
-    (path,) = response["files"]
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    (url,) = response["urls"]
+    signed = url[url.index("/api/"):]  # path + authSig, as the browser would request it
+    assert f"/api/{DOMAIN}/export/{entry.entry_id}?authSig=" in signed
+
+    # The link must work without any login (it is opened from a notification) ...
+    client = await hass_client_no_auth()
+    download = await client.get(signed)
+    assert download.status == 200
+    assert "attachment" in download.headers["Content-Disposition"]
+    lines = (await download.text()).splitlines()
     assert lines[0] == "hour_utc,power_kw,indoor_temp,outdoor_temp,humidity,wind_speed,wind_direction"
     assert lines[1] == "2026-01-01T00:00:00+00:00,1.0,20.0,4.0,,,"  # oldest first, empty cell = no value
     assert lines[2] == "2026-01-01T01:00:00+00:00,2.0,,3.5,,,"
 
+    # ... but not without the signature.
+    assert (await client.get(signed.split("?")[0])).status == 401
+
+    # The notification carries the same kind of link; the button creates it too.
     await hass.services.async_call(
         "button", "press", {"entity_id": "button.test_system_export_history"}, blocking=True
     )
-
-    client = await hass_client()
-    response = await client.get(f"/api/{DOMAIN}/export/{entry.entry_id}")
-    assert response.status == 200
-    assert "attachment" in response.headers["Content-Disposition"]
-    body = await response.text()
-    assert body.splitlines()[1] == "2026-01-01T00:00:00+00:00,1.0,20.0,4.0,,,"
-    assert (await client.get(f"/api/{DOMAIN}/export/unknown")).status == 404
-
     notification = hass.data["persistent_notification"][f"{DOMAIN}_export_{entry.entry_id}"]
     assert f"/api/{DOMAIN}/export/{entry.entry_id}?authSig=" in notification["message"]
+
+    # Nothing is written into the HA config directory.
+    assert not Path(hass.config.path("haeo_klima_forecast_export")).exists()

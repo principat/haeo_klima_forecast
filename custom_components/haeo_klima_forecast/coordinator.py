@@ -9,14 +9,12 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from pathlib import Path
 
 import aiohttp
 from homeassistant.components import persistent_notification
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_change, async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util import slugify
 
 from .const import (
     CONF_FORECAST_HOURS,
@@ -33,18 +31,16 @@ from .const import (
     DYNAMIC_CAP_HEADROOM,
     DEFAULT_UPDATE_INTERVAL_MIN,
     DOMAIN,
-    EXPORT_DIR,
     HISTORY_SYNC_HOUR,
     HISTORY_SYNC_MINUTE,
 )
-from .download import signed_download_path
+from .download import signed_download_url
 from .forecast import compute_forecast_series
 from .history_store import (
     HistoryStore,
     async_backfill_indoor_from_state,
     async_sample_indoor_temperature_now,
     async_sync_history,
-    rows_to_csv,
 )
 from .weather.forecast_template import async_get_forecast_points
 from .weighting import WeightStore, async_train_weights
@@ -249,30 +245,22 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
             return 21.0
 
     async def async_export_history(self) -> str:
-        """Writes the stored hourly training data as CSV into the HA config directory; returns the file path.
+        """Offers the stored hourly training data as a CSV download; returns the download URL.
 
-        Lets the user inspect or analyse the data (spreadsheet, scripts)
-        without digging the file out of `.storage`.
+        Nothing is written to disk: the CSV is generated when the link is
+        opened (see download.py), so no files pile up in the HA directory.
         """
         rows = await self.history_store.async_load()
-        content = rows_to_csv(rows)
-        path = Path(self.hass.config.path(EXPORT_DIR, f"{slugify(self.entry.title)}_history.csv"))
-
-        def _write() -> None:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
-
-        await self.hass.async_add_executor_job(_write)
-        _LOGGER.info("HAEO Klima Forecast: exported %s hour(s) to %s", len(rows), path)
+        url = signed_download_url(self.hass, self.entry.entry_id)
+        _LOGGER.info("HAEO Klima Forecast: %s hour(s) ready for download", len(rows))
         persistent_notification.async_create(
             self.hass,
-            f"{len(rows)} hourly rows exported to `{path}`.\n\n"
-            f"[Download CSV]({signed_download_path(self.hass, self.entry.entry_id)}) "
+            f"{len(rows)} hourly rows ready.\n\n[Download CSV]({url}) "
             "(link valid for 10 minutes; press the export button again for a new one)",
-            title=f"{self.entry.title}: history exported",
+            title=f"{self.entry.title}: history export",
             notification_id=f"{DOMAIN}_export_{self.entry.entry_id}",
         )
-        return str(path)
+        return url
 
     async def async_recalculate_weights(self) -> None:
         """Called by the `haeo_klima_forecast.recalculate_weights` service."""

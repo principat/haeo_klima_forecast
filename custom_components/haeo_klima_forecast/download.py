@@ -11,6 +11,7 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.util import slugify
 
 from .const import DOMAIN
@@ -20,9 +21,17 @@ DOWNLOAD_URL = f"/api/{DOMAIN}/export/{{entry_id}}"
 DOWNLOAD_LINK_VALIDITY = timedelta(minutes=10)
 
 
-def signed_download_path(hass: HomeAssistant, entry_id: str) -> str:
-    """Relative, time-limited URL under which the CSV of this entry can be downloaded."""
-    return async_sign_path(hass, DOWNLOAD_URL.format(entry_id=entry_id), DOWNLOAD_LINK_VALIDITY)
+def signed_download_url(hass: HomeAssistant, entry_id: str) -> str:
+    """Time-limited URL under which the CSV of this entry can be downloaded.
+
+    Absolute if HA knows its own URL: the frontend treats relative links in
+    notifications as in-app navigation instead of a download.
+    """
+    path = async_sign_path(hass, DOWNLOAD_URL.format(entry_id=entry_id), DOWNLOAD_LINK_VALIDITY)
+    try:
+        return f"{get_url(hass, prefer_external=False)}{path}"
+    except NoURLAvailableError:
+        return path
 
 
 class HaeoExportDownloadView(HomeAssistantView):

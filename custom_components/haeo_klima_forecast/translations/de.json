@@ -45,7 +45,7 @@
     },
     "export_history": {
       "name": "Historie exportieren",
-      "description": "Schreibt die gespeicherten stündlichen Trainingsdaten als CSV-Datei in das Konfigurationsverzeichnis."
+      "description": "Erzeugt einen Download-Link für die gespeicherten stündlichen Trainingsdaten als CSV-Datei."
     }
   }
 }

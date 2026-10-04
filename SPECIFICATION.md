@@ -856,16 +856,16 @@ damit HA dafür unbegrenzt Langzeitstatistik führt:
   vorhandene Gewichte drückbar; Trainingsfehler werden als
   `HomeAssistantError` sichtbar.
 - **Service** `haeo_klima_forecast.export_history` (gleiches optionales Feld
-  `config_entry_id`, `SupportsResponse.OPTIONAL`): schreibt je System die
-  Stundendaten als CSV nach
-  `<config>/haeo_klima_forecast_export/<slug(Titel)>_history.csv`
-  (`EXPORT_DIR`), legt eine Persistent Notification
-  (`haeo_klima_forecast_export_<entry_id>`) an und liefert
-  `{"files": [...]}` als Service-Antwort. Das Schreiben läuft im Executor.
-  Die Benachrichtigung enthält einen Download-Link auf den View
+  `config_entry_id`, `SupportsResponse.OPTIONAL`): legt je System eine
+  Persistent Notification (`haeo_klima_forecast_export_<entry_id>`) mit
+  Download-Link an und liefert `{"urls": [...]}` als Service-Antwort. Es
+  wird **keine Datei** im HA-Dateisystem geschrieben; die CSV entsteht erst
+  beim Aufruf des Links. Der Link zeigt auf den View
   `/api/haeo_klima_forecast/export/<entry_id>` (`download.py`,
-  `requires_auth`, per `async_sign_path` 10 Minuten gültig signiert,
-  `Content-Disposition: attachment`); Manifest-Abhängigkeit `http`.
+  `requires_auth`, per `async_sign_path` 10 Minuten gültig signiert, daher
+  ohne Login aufrufbar; `Content-Disposition: attachment`; absolute URL via
+  `get_url`, weil das Frontend relative Links als In-App-Navigation
+  behandelt). Manifest-Abhängigkeit `http`.
 - **Button-Entity** `HaeoExportHistoryButton`: ruft
   `coordinator.async_export_history()` für das eigene System; immer
   verfügbar.

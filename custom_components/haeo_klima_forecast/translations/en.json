@@ -45,7 +45,7 @@
     },
     "export_history": {
       "name": "Export history",
-      "description": "Writes the stored hourly training data as a CSV file into the configuration directory."
+      "description": "Creates a download link for the stored hourly training data as a CSV file."
     }
   }
 }

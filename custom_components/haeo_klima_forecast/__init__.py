@@ -79,7 +79,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await target.async_recalculate_weights()
 
     async def _handle_export_history(call: ServiceCall) -> dict:
-        return {"files": [await target.async_export_history() for target in _targets(call)]}
+        return {"urls": [await target.async_export_history() for target in _targets(call)]}
 
     hass.services.async_register(
         DOMAIN,
