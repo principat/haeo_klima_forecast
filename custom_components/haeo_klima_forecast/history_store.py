@@ -19,6 +19,8 @@ queries or weather API calls at training time.
 """
 from __future__ import annotations
 
+import csv
+import io
 import logging
 from datetime import datetime, timedelta
 
@@ -44,6 +46,20 @@ FIELDS = (
     "wind_speed",
     "wind_direction",
 )
+
+
+EXPORT_COLUMNS = ("hour_utc", *FIELDS)
+
+
+def rows_to_csv(rows: dict[str, dict]) -> str:
+    """Renders the stored hourly rows as CSV (one line per hour, oldest first; empty cell = no value)."""
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(EXPORT_COLUMNS)
+    for hour in sorted(rows):
+        row = rows[hour]
+        writer.writerow([hour, *("" if row.get(f) is None else row[f] for f in FIELDS)])
+    return out.getvalue()
 
 
 class HistoryStore:

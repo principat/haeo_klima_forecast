@@ -42,6 +42,10 @@
     "recalculate_weights": {
       "name": "Recalculate weights",
       "description": "Recalculates the regression weights based on the historical data."
+    },
+    "export_history": {
+      "name": "Export history",
+      "description": "Writes the stored hourly training data as a CSV file into the configuration directory."
     }
   }
 }

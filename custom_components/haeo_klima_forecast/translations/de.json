@@ -42,6 +42,10 @@
     "recalculate_weights": {
       "name": "Gewichte neu berechnen",
       "description": "Berechnet die Regressions-Gewichte anhand der historischen Daten neu."
+    },
+    "export_history": {
+      "name": "Historie exportieren",
+      "description": "Schreibt die gespeicherten stündlichen Trainingsdaten als CSV-Datei in das Konfigurationsverzeichnis."
     }
   }
 }

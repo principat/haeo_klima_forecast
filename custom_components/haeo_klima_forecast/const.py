@@ -26,6 +26,8 @@ DEFAULT_TRAINING_DAYS = 365
 DYNAMIC_CAP_HEADROOM = 1.1  # forecast cap = highest measured power in the training data * this
 
 SERVICE_RECALCULATE_WEIGHTS = "recalculate_weights"
+SERVICE_EXPORT_HISTORY = "export_history"
+EXPORT_DIR = "haeo_klima_forecast_export"  # below the HA config directory
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 
 # Weekly automatic retraining (switch entity), local time

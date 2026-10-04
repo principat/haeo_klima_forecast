@@ -16,3 +16,20 @@ recalculate_weights:
       selector:
         config_entry:
           integration: haeo_klima_forecast
+
+export_history:
+  name: Export history
+  description: >
+    Writes the integration's stored hourly training data (power, indoor and
+    outdoor temperature, humidity, wind) as a CSV file into the folder
+    haeo_klima_forecast_export of the Home Assistant configuration directory.
+  fields:
+    config_entry_id:
+      name: Climate system
+      description: >
+        Optional: the config entry ID of the climate system to export. If
+        empty, all configured systems are exported.
+      required: false
+      selector:
+        config_entry:
+          integration: haeo_klima_forecast

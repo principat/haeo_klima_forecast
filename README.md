@@ -128,6 +128,9 @@ automatically as the training data does).
   shows when the weights were last calculated (`unknown` if never).
 - `button.<system>_recalculate_weights`: recalculates the weights of this
   system immediately.
+- `button.<system>_export_history` / service `haeo_klima_forecast.export_history`:
+  writes the stored hourly training data (power, temperatures, humidity,
+  wind) as CSV to `<config>/haeo_klima_forecast_export/<system>_history.csv`.
 - `switch.<system>_weekly_weight_recalculation`: weekly automatic
   recalculation (Sunday 03:30) on/off.
 

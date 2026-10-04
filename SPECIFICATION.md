@@ -174,6 +174,22 @@ Leistungsaufnahme bestimmt.
         `cos(Windrichtung)`-Komponenten oder durch eine feste Zuordnung zu
         Himmelsrichtungs-Sektoren (Windexposition der Gebäudeseite). Diese
         Aufbereitung ist bei einer Neuimplementierung explizit zu treffen.
+     7. **Tageszeit** – `hour_sin`, `hour_cos`, `hour_sin2`, `hour_cos2`
+        (Sinus/Cosinus der lokalen Stunde, 1. und 2. Harmonische). Bildet den
+        Tagesgang/Zeitplan der Anlage ab (lokale Zeit, daher auch über
+        Sommer-/Winterzeit hinweg korrekt).
+     8. **outdoor_above_<k>** – stückweise lineare Terme
+        `max(0, Außentemperatur − k)` für die Knoten k = 0, 5, …, 30 °C.
+        Sie erlauben der Anlage, innerhalb eines Bereichs zu modulieren
+        (Steigung ändert sich je Temperaturbereich). Ein Knoten wird nur
+        verwendet, wenn die Trainingsdaten Außentemperaturen unter k
+        enthalten und mindestens 24 Stunden klar (> k+1) darüber liegen.
+   - **Fehlende Innentemperatur (nur Training)**: Stunden mit Leistung und
+     Außentemperatur, aber ohne Innentemperatur, werden mit dem Mittelwert der
+     gemessenen Innentemperaturen aufgefüllt (nur wenn mindestens 24 Stunden
+     gemessen vorliegen). Die Schätzung existiert nur im Trainingslauf und
+     wird nie in den HistoryStore geschrieben; Stunden ohne Leistungs- oder
+     Wetterdaten werden nicht aufgefüllt.
    - Verwendet wird dabei die **tatsächlich gemessene Innentemperatur**
      (Thermometer oder Ist-Temperatur-Attribut einer Klima-Entität, s. 1.2),
      nicht ein Sollwert. Ob eine Stunde heiz- oder kühlseitig zu behandeln
@@ -203,12 +219,18 @@ Leistungsaufnahme bestimmt.
      vorzugeben.
 3. Aus den gesammelten Zeilen wird ein lineares Regressionsmodell
    geschätzt, das die konfigurierten Eingangsgrößen (mindestens drei: bias,
-   heating_degree_hours, cooling_degree_hours; höchstens sieben/acht, wenn
-   Wind, Windrichtung – ggf. als zwei sin/cos-Spalten – und
-   Luftfeuchtigkeit alle konfiguriert sind) auf die Leistungsaufnahme
-   abbildet (siehe technischer Teil für das konkrete Verfahren). Ergebnis:
-   ein Koeffizient (Gewicht) pro Eingangsgröße.
-4. Qualitätsmaß: Bestimmtheitsmaß R² des Modells auf den Trainingsdaten.
+   heating_degree_hours, cooling_degree_hours plus vier Tageszeit-Features;
+   dazu die passenden Temperatur-Knoten sowie Wind, Windrichtung – als zwei
+   sin/cos-Spalten – und Luftfeuchtigkeit, sofern genug Daten vorliegen)
+   auf die Leistungsaufnahme abbildet (siehe technischer Teil für das
+   konkrete Verfahren). Ergebnis: ein Koeffizient (Gewicht) pro
+   Eingangsgröße. Das Modell ist damit stückweise linear in der
+   Außentemperatur und enthält einen Tagesgang.
+4. Qualitätsmaße auf den Trainingsdaten: Bestimmtheitsmaß R² sowie der
+   **Tagesenergie-Fehler** (`daily_energy_error_pct`): mittlerer absoluter
+   Fehler der Tagesenergie relativ zur mittleren Tagesenergie, nur über
+   vollständige 24-Stunden-Tage (in-sample). Das ist die für die Planung
+   maßgebliche Größe; ohne vollständigen Tag ist der Wert leer.
 5. Es müssen mindestens `Anzahl Features + 5` nutzbare Datenpunkte
    vorhanden sein, sonst schlägt das Training mit einer verständlichen,
    handlungsleitenden Fehlermeldung fehl (z. B. "zu wenige Datenpunkte,
@@ -229,6 +251,15 @@ Leistungsaufnahme bestimmt.
 
 Ein fehlgeschlagener automatischer Lauf darf den nächsten planmäßigen
 Lauf nicht verhindern.
+
+Eine manuelle Neuberechnung synchronisiert vor dem Training zuerst den
+HistoryStore (inkl. Nachfüllen der Innentemperatur), damit auch frisch
+eingerichtete Systeme sofort ausreichend Datenpunkte haben.
+
+**Export der Trainingsdaten**: Die im HistoryStore gespeicherten
+Stundenwerte lassen sich per Service `export_history` oder Button
+"Export History" als CSV exportieren (siehe 2.11), z. B. zur Analyse in
+einer Tabellenkalkulation.
 
 ### 1.4 Fachlicher Kernprozess: Vorhersage
 
@@ -622,8 +653,19 @@ undokumentierte APIs genutzt werden:
   Mirror-Statistics (siehe 2.6), für nicht abgedeckte Stunden Fallback auf
   Rohhistorie bzw. die Historie-API des Wetter-Providers.
 - Fehlerbehandlung: `ValueError` mit sprechendem Text bei zu wenigen
-  Datenpunkten (`len(FEATURE_NAMES) + 5`); wird in `button.py` in eine
+  Datenpunkten (`Anzahl Features + 5`); wird in `button.py` in eine
   `HomeAssistantError` übersetzt, die im UI sichtbar ist.
+- **Aktueller Ablauf** (`async_train_weights`): Zeilen aus dem HistoryStore
+  (nur mit `power_kw`), lokale `hour`/`date` ergänzen,
+  `_fill_missing_indoor_temp` (Mittelwert, nur Training),
+  `_select_knots` und `_select_optional_features` bestimmen die Spalten,
+  `_row_to_features` baut die Zeilen (gemeinsame Funktion `feature_values`
+  aus `forecast.py`, damit Training und Vorhersage identisch rechnen).
+  Die Regression (`_fit`) läuft über `hass.async_add_executor_job`, um den
+  Event-Loop nicht zu blockieren.
+- **HistoryStore-Synchronisation**: `async_latest_synced_hour` zählt nur
+  Stunden, die sowohl `power_kw` als auch `outdoor_temp` enthalten; Stunden
+  ohne Wetterdaten werden beim nächsten Lauf erneut versucht.
 
 ### 2.6 "Mirror-Sensoren" (`mirror.py`) – heutiger Workaround, laut 1.6 abgelöst
 
@@ -709,17 +751,28 @@ damit HA dafür unbegrenzt Langzeitstatistik führt:
 - Gespeicherte Struktur: `coefficients` (dict), `r2`, `n_samples`,
   `trained_at` (ISO-Zeitstempel, UTC), `feature_names`,
   `max_observed_kw` (höchste gemessene Leistung der Trainingsdaten, Basis der
-  dynamischen Obergrenze).
+  dynamischen Obergrenze), `daily_energy_error_pct` (s. 1.3).
+- Die Spalten des HistoryStore (`FIELDS`) werden für den Export
+  (`rows_to_csv`, `EXPORT_COLUMNS = ("hour_utc", *FIELDS)`) verwendet:
+  UTF-8, Trenner `,`, Zeilenende `\n`, älteste Stunde zuerst, leere Zelle =
+  kein Wert.
 
 ### 2.8 Regressionsverfahren
 
 - `numpy`-basierte Ridge-Regression (kleine Regularisierung
-  `RIDGE_ALPHA = 1e-3` gegen Multikollinearität):
+  `RIDGE_ALPHA = 1e-2` gegen Multikollinearität, da sich die Knoten-Terme
+  überlappen):
   `(XᵀX + αI)⁻¹Xᵀy` über `numpy.linalg.solve`.
-- Feature-Matrix `X`: eine Zeile je nutzbarer Trainingsstunde, Spalten exakt
-  in der Reihenfolge `FEATURE_NAMES` (siehe 1.3).
+- Feature-Matrix `X`: eine Zeile je nutzbarer Trainingsstunde, Spalten in der
+  Reihenfolge `BASE_FEATURE_NAMES` + gewählte Knoten + gewählte optionale
+  Features (siehe 1.3).
 - R² klassisch über `1 − SS_res/SS_tot` (`SS_tot` gegen Division durch 0
   abgesichert).
+- Tagesenergie-Fehler: je lokalem Kalendertag Summe Ist/Prognose, nur Tage
+  mit genau 24 Stunden; Ergebnis `100 · mean(|Ist−Prognose|) / mean(Ist)`.
+- Verworfene Alternativen: Gradient Boosting (beste Güte, aber scikit-learn
+  ~160 MB und ~100 MB RAM) sowie Lag-Features der Außentemperatur (nur
+  ≈ +0,01 R²).
 
 ### 2.9 Vorhersage-Berechnung (`forecast.py`)
 
@@ -736,6 +789,12 @@ damit HA dafür unbegrenzt Langzeitstatistik führt:
 - `compute_hour()` / `compute_forecast_series()`: reine Funktionen ohne
   HA-Bezug, nehmen `WeatherPoint`, `IndoorUnitPlan`-Liste, Koeffizienten-Dict
   und Nachtabsenkungs-Konfiguration entgegen.
+- `feature_values(outdoor, indoor, hour, wind_speed, humidity, wind_direction)`
+  berechnet alle Feature-Werte und wird von Training und Vorhersage
+  gemeinsam genutzt; `compute_hour()` summiert
+  `coefficients.get(name, 0) · wert` und nutzt die lokale Stunde
+  (`dt_util.as_local(timestamp).hour`). Features ohne Koeffizient (z. B. ein
+  nicht trainierter Knoten) tragen 0 bei.
 - Rückwärtskompatibilität: falls ein gespeichertes Gewichte-Set noch das
   alte, undifferenzierte `degree_hours`-Feature statt der aufgeteilten
   `heating_/cooling_degree_hours` enthält, wird dieses als Fallback für
@@ -767,6 +826,11 @@ damit HA dafür unbegrenzt Langzeitstatistik führt:
   `archive-api.open-meteo.com` (Historie), kein API-Key. Archiv-Delay von
   5 Tagen wird aktiv berücksichtigt (Anfrage-Ende wird gekappt, bei
   vollständig unerreichbarem Zeitraum leere Liste + Warn-Log statt Fehler).
+  Für die jüngsten Tage (jünger als 5 Tage) wird stattdessen die
+  Vorhersage-API (`api.open-meteo.com/v1/forecast`, Parameter für
+  vergangene Tage) abgefragt; bei Überlappung gewinnt das Archiv.
+  Netzwerkfehler dieses Teils führen nur zu einer Warnung, die Stunden
+  werden später erneut versucht.
 - `dwd.py`: nutzt Bright Sky (`api.brightsky.dev`) als offenen Wrapper um
   DWD-Open-Data (MOSMIX-Vorhersage + Stationsmessungen), da der DWD selbst
   keine einfache lat/lon-JSON-API anbietet. Beobachtungs-Delay von 1 Tag
@@ -791,6 +855,16 @@ damit HA dafür unbegrenzt Langzeitstatistik führt:
   `coordinator.async_recalculate_weights()` auf; bleibt auch ohne
   vorhandene Gewichte drückbar; Trainingsfehler werden als
   `HomeAssistantError` sichtbar.
+- **Service** `haeo_klima_forecast.export_history` (gleiches optionales Feld
+  `config_entry_id`, `SupportsResponse.OPTIONAL`): schreibt je System die
+  Stundendaten als CSV nach
+  `<config>/haeo_klima_forecast_export/<slug(Titel)>_history.csv`
+  (`EXPORT_DIR`), legt eine Persistent Notification
+  (`haeo_klima_forecast_export_<entry_id>`) an und liefert
+  `{"files": [...]}` als Service-Antwort. Das Schreiben läuft im Executor.
+- **Button-Entity** `HaeoExportHistoryButton`: ruft
+  `coordinator.async_export_history()` für das eigene System; immer
+  verfügbar.
 - **Switch-Entity** `HaeoAutoRecalculateSwitch`
   ([switch.py](custom_components/haeo_klima_forecast/switch.py)): statt
   eine echte HA-Automatisierung in die Nutzerkonfiguration zu schreiben
@@ -814,6 +888,7 @@ damit HA dafür unbegrenzt Langzeitstatistik führt:
 | Gewichte/Diagnose | `sensor` | `{entry_id}_weights` | diagnostic |
 | Zeitpunkt letzte Gewichtsberechnung | `sensor` (`timestamp`) | `{entry_id}_weights_trained_at` | diagnostic |
 | Recalculate-Button | `button` | `{entry_id}_recalculate_weights` | normal |
+| Export-History-Button | `button` | `{entry_id}_export_history` | normal |
 | Weekly-Recalc-Switch | `switch` | `{entry_id}_auto_recalculate_weights` | config |
 | Climate-Mirror (5×/Innengerät) | `sensor` | `haeo_klima_forecast_mirror_{climate_entity_id}_{suffix}` | hidden, diagnostic |
 | Weather-Mirror (3×/System) | `sensor` | `{entry_id}_mirror_weather_{suffix}` | hidden, diagnostic |
@@ -839,6 +914,13 @@ gemeinsame Basisklasse `HaeoBaseEntity`
   durch; Switch löst nur am konfigurierten Wochentag/Uhrzeit aus, nur
   solange er an ist, und sein Zustand wird per `RestoreEntity` wiederher-
   gestellt.
+- [tests/test_weighting.py](tests/test_weighting.py),
+  [tests/test_forecast.py](tests/test_forecast.py),
+  [tests/test_history_store.py](tests/test_history_store.py),
+  [tests/test_config_entry_setup.py](tests/test_config_entry_setup.py):
+  Features (Tageszeit, Knoten), Auffüllen der Innentemperatur,
+  Tagesenergie-Fehler, CSV-Export (`rows_to_csv`) sowie Export-Service und
+  -Button.
 - [tests/test_mirror.py](tests/test_mirror.py): reine Unit-Tests der
   Kodier-/Namensfunktionen aus `mirror.py`.
 

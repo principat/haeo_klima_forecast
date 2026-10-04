@@ -270,3 +270,18 @@ async def test_backfill_indoor_fills_only_missing_values(hass, monkeypatch) -> N
     assert rows[h1.isoformat()]["indoor_temp"] == 21.0
     assert rows[h2.isoformat()]["indoor_temp"] == 18.0  # never overwritten
     assert rows[h3.isoformat()]["indoor_temp"] == 21.5
+
+
+def test_rows_to_csv_sorts_hours_and_leaves_missing_values_empty() -> None:
+    csv_text = hs.rows_to_csv(
+        {
+            "2026-01-02T00:00:00+00:00": {"power_kw": 2.0, "outdoor_temp": None},
+            "2026-01-01T00:00:00+00:00": {"power_kw": 1.0, "indoor_temp": 20.5, "wind_direction": 90},
+        }
+    )
+
+    assert csv_text.splitlines() == [
+        "hour_utc,power_kw,indoor_temp,outdoor_temp,humidity,wind_speed,wind_direction",
+        "2026-01-01T00:00:00+00:00,1.0,20.5,,,,90",
+        "2026-01-02T00:00:00+00:00,2.0,,,,,",
+    ]

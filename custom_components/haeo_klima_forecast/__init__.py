@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
@@ -14,6 +14,7 @@ from .const import (
     DEFAULT_FORECAST_HOURS,
     DOMAIN,
     PLATFORMS,
+    SERVICE_EXPORT_HISTORY,
     SERVICE_RECALCULATE_WEIGHTS,
 )
 from .coordinator import HaeoForecastCoordinator
@@ -53,7 +54,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    async def _handle_recalculate_weights(call: ServiceCall) -> None:
+    def _targets(call: ServiceCall) -> list[HaeoForecastCoordinator]:
         target_entry_id = call.data.get(ATTR_CONFIG_ENTRY_ID)
         if target_entry_id:
             if target_entry_id not in hass.data.get(DOMAIN, {}):
@@ -62,19 +63,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     "(or no longer) known. The integration was likely set up again "
                     "since then and received a new entry ID - please reselect the "
                     "climate system in the service call, or leave the field empty "
-                    "to recalculate all systems."
+                    "to address all systems."
                 )
-            targets = [hass.data[DOMAIN][target_entry_id]]
-        else:
-            targets = list(hass.data.get(DOMAIN, {}).values())
-        for target in targets:
+            return [hass.data[DOMAIN][target_entry_id]]
+        return list(hass.data.get(DOMAIN, {}).values())
+
+    async def _handle_recalculate_weights(call: ServiceCall) -> None:
+        for target in _targets(call):
             await target.async_recalculate_weights()
+
+    async def _handle_export_history(call: ServiceCall) -> dict:
+        return {"files": [await target.async_export_history() for target in _targets(call)]}
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_RECALCULATE_WEIGHTS,
         _handle_recalculate_weights,
         schema=SERVICE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_EXPORT_HISTORY,
+        _handle_export_history,
+        schema=SERVICE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     return True
@@ -86,6 +98,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     if not hass.data.get(DOMAIN):
         hass.services.async_remove(DOMAIN, SERVICE_RECALCULATE_WEIGHTS)
+        hass.services.async_remove(DOMAIN, SERVICE_EXPORT_HISTORY)
     return unload_ok
 
 
