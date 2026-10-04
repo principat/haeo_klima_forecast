@@ -120,8 +120,10 @@ automatically as the training data does).
   hour (kW), attribute `forecast` = complete hourly series (time, value,
   outdoor_temp, indoor_temp, heating/cooling_degree_hours).
 - `sensor.<system>_weights`: diagnostic sensor, state = R² of the last
-  regression, attributes contain the individual coefficients and which
-  optional features (wind/humidity/wind direction) were included.
+  regression. Attributes contain the individual coefficients, the features
+  that were included (time of day, outdoor-temperature breakpoints, optional
+  wind/humidity/wind direction) and `daily_energy_error_pct`, the average
+  error of the predicted daily energy (in-sample, full days only).
 - `sensor.<system>_weights_last_calculated`: diagnostic timestamp sensor,
   shows when the weights were last calculated (`unknown` if never).
 - `button.<system>_recalculate_weights`: recalculates the weights of this

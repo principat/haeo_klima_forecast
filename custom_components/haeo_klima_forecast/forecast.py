@@ -17,6 +17,8 @@ import math
 from dataclasses import dataclass
 from datetime import datetime
 
+from homeassistant.util import dt as dt_util
+
 from .weather.base import WeatherPoint
 
 
@@ -30,27 +32,71 @@ class ForecastHour:
     indoor_temp: float
 
 
+TIME_OF_DAY_FEATURES = ["hour_sin", "hour_cos", "hour_sin2", "hour_cos2"]
+
+# Breakpoints (°C) of the piecewise-linear outdoor-temperature terms: the
+# unit modulates within a band, so a single slope does not fit. A knot only
+# becomes a feature if the training data covers it (see weighting.py).
+OUTDOOR_KNOTS = (0, 5, 10, 15, 20, 25, 30)
+
+
+def knot_feature_name(knot: int) -> str:
+    return f"outdoor_above_{knot}"
+
+
+def feature_values(
+    outdoor: float,
+    indoor: float,
+    hour: int,
+    wind_speed: float | None = None,
+    humidity: float | None = None,
+    wind_direction: float | None = None,
+) -> dict[str, float]:
+    """All candidate model features for one hour (`hour` = local hour of day).
+
+    Shared by the training (weighting.py) and the forecast, so both always
+    build the features the same way. Optional inputs that are missing are
+    simply left out.
+    """
+    values: dict[str, float] = {
+        "bias": 1.0,
+        "heating_degree_hours": max(0.0, indoor - outdoor),
+        "cooling_degree_hours": max(0.0, outdoor - indoor),
+        "hour_sin": math.sin(2 * math.pi * hour / 24),
+        "hour_cos": math.cos(2 * math.pi * hour / 24),
+        "hour_sin2": math.sin(4 * math.pi * hour / 24),
+        "hour_cos2": math.cos(4 * math.pi * hour / 24),
+    }
+    for knot in OUTDOOR_KNOTS:
+        values[knot_feature_name(knot)] = max(0.0, outdoor - knot)
+    if wind_speed is not None:
+        values["wind_speed"] = wind_speed
+    if humidity is not None:
+        values["humidity"] = humidity
+    if wind_direction is not None:
+        radians = math.radians(wind_direction)
+        values["wind_direction_sin"] = math.sin(radians)
+        values["wind_direction_cos"] = math.cos(radians)
+    return values
+
+
 def compute_hour(
     weather: WeatherPoint, indoor_temp: float, coefficients: dict[str, float], max_kw: float | None = None
 ) -> ForecastHour:
     """Computes the predicted power for a single hour."""
-    heating_degree_hours = max(0.0, indoor_temp - weather.temperature_c)
-    cooling_degree_hours = max(0.0, weather.temperature_c - indoor_temp)
-
-    predicted = (
-        coefficients.get("bias", 0.0)
-        + coefficients.get("heating_degree_hours", 0.0) * heating_degree_hours
-        + coefficients.get("cooling_degree_hours", 0.0) * cooling_degree_hours
+    values = feature_values(
+        weather.temperature_c,
+        indoor_temp,
+        dt_util.as_local(weather.timestamp).hour,
+        weather.wind_speed_ms,
+        weather.humidity_pct,
+        weather.wind_direction_deg,
     )
+    heating_degree_hours = values["heating_degree_hours"]
+    cooling_degree_hours = values["cooling_degree_hours"]
 
-    if weather.wind_speed_ms is not None:
-        predicted += coefficients.get("wind_speed", 0.0) * weather.wind_speed_ms
-    if weather.humidity_pct is not None:
-        predicted += coefficients.get("humidity", 0.0) * weather.humidity_pct
-    if weather.wind_direction_deg is not None:
-        radians = math.radians(weather.wind_direction_deg)
-        predicted += coefficients.get("wind_direction_sin", 0.0) * math.sin(radians)
-        predicted += coefficients.get("wind_direction_cos", 0.0) * math.cos(radians)
+    # Coefficients of features the model was not trained with are absent -> 0.
+    predicted = sum(coefficients.get(name, 0.0) * value for name, value in values.items())
 
     predicted = max(0.0, predicted)  # negative forecasts make no physical sense
     if max_kw is not None:

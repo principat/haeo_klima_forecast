@@ -258,5 +258,6 @@ class HaeoForecastCoordinator(DataUpdateCoordinator):
             "trained_at": result.trained_at,
             "feature_names": result.feature_names,
             "max_observed_kw": result.max_observed_kw,
+            "daily_energy_error_pct": result.daily_energy_error_pct,
         }
         await self.async_request_refresh()

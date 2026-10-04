@@ -3,3 +3,6 @@ __pycache__/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Local analysis data and scripts
+tmp/

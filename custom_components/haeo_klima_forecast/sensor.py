@@ -12,6 +12,10 @@ from .coordinator import HaeoForecastCoordinator
 from .entity import HaeoBaseEntity
 
 
+def _round_or_none(value, digits: int):
+    return round(value, digits) if value is not None else None
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
     coordinator: HaeoForecastCoordinator = hass.data[DOMAIN][entry.entry_id]
 
@@ -80,6 +84,7 @@ class HaeoWeightsSensor(HaeoBaseEntity, SensorEntity):
             "n_samples": weights.get("n_samples"),
             "trained_at": weights.get("trained_at"),
             "max_observed_kw": weights.get("max_observed_kw"),
+            "daily_energy_error_pct": _round_or_none(weights.get("daily_energy_error_pct"), 1),
             "feature_names": weights.get("feature_names", []),
         }
 

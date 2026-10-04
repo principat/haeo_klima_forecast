@@ -1,7 +1,11 @@
 """Unit tests for the pure forecast formula (no hass instance needed)."""
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
+
+import pytest
+from homeassistant.util import dt as dt_util
 
 from custom_components.haeo_klima_forecast.forecast import compute_forecast_series, compute_hour
 from custom_components.haeo_klima_forecast.weather.base import WeatherPoint
@@ -78,3 +82,15 @@ def test_max_kw_caps_forecast() -> None:
     cold = WeatherPoint(timestamp=NOW, temperature_c=0.0)
     assert compute_hour(cold, 20.0, coefficients).predicted_kw == 20.0
     assert compute_hour(cold, 20.0, coefficients, max_kw=5.0).predicted_kw == 5.0
+
+
+def test_time_of_day_and_knot_coefficients_are_applied() -> None:
+    ts = NOW
+    weather = WeatherPoint(timestamp=ts, temperature_c=12.0)
+    local_hour = dt_util.as_local(ts).hour
+    coefficients = {"bias": 0.0, "hour_cos": 1.0, "outdoor_above_5": 2.0, "outdoor_above_10": 1.0}
+
+    result = compute_hour(weather, indoor_temp=20.0, coefficients=coefficients)
+
+    expected = math.cos(2 * math.pi * local_hour / 24) + 2.0 * (12 - 5) + 1.0 * (12 - 10)
+    assert result.predicted_kw == pytest.approx(expected)
